@@ -1,34 +1,20 @@
 "use strict";
 
-
 /*
 ==================================================
 LIVEKIT
 ==================================================
 */
 
-const LIVEKIT =
-  window.LivekitClient;
-alert(
-  LIVEKIT
-    ? "LiveKit загружен"
-    : "LiveKit НЕ загружен"
-);
+const LIVEKIT = window.LivekitClient;
 
 if (!LIVEKIT) {
   console.error("LiveKit SDK не загружен.");
-} else {
-  console.log("LiveKit SDK загружен:", LIVEKIT);
 }
 
-const Room =
-  LIVEKIT?.Room;
-
-const RoomEvent =
-  LIVEKIT?.RoomEvent;
-
-const Track =
-  LIVEKIT?.Track;
+const Room = LIVEKIT?.Room;
+const RoomEvent = LIVEKIT?.RoomEvent;
+const Track = LIVEKIT?.Track;
 
 
 /*
@@ -38,104 +24,64 @@ DOM
 */
 
 const startScreen =
-  document.getElementById(
-    "startScreen"
-  );
+  document.getElementById("startScreen");
 
 const callScreen =
-  document.getElementById(
-    "callScreen"
-  );
+  document.getElementById("callScreen");
 
 const startButton =
-  document.getElementById(
-    "startButton"
-  );
+  document.getElementById("startButton");
 
 const joinButton =
-  document.getElementById(
-    "joinButton"
-  );
+  document.getElementById("joinButton");
 
 const remoteIdInput =
-  document.getElementById(
-    "remoteIdInput"
-  );
+  document.getElementById("remoteIdInput");
 
 const startStatus =
-  document.getElementById(
-    "startStatus"
-  );
+  document.getElementById("startStatus");
 
 const localVideo =
-  document.getElementById(
-    "localVideo"
-  );
+  document.getElementById("localVideo");
 
 const remoteVideo =
-  document.getElementById(
-    "remoteVideo"
-  );
+  document.getElementById("remoteVideo");
 
 const localPlaceholder =
-  document.getElementById(
-    "localPlaceholder"
-  );
+  document.getElementById("localPlaceholder");
 
 const remotePlaceholder =
-  document.getElementById(
-    "remotePlaceholder"
-  );
+  document.getElementById("remotePlaceholder");
 
 const remotePlaceholderText =
-  document.getElementById(
-    "remotePlaceholderText"
-  );
+  document.getElementById("remotePlaceholderText");
 
 const connectionStatus =
-  document.getElementById(
-    "connectionStatus"
-  );
+  document.getElementById("connectionStatus");
 
 const myPeerId =
-  document.getElementById(
-    "myPeerId"
-  );
+  document.getElementById("myPeerId");
 
 const copyIdButton =
-  document.getElementById(
-    "copyIdButton"
-  );
+  document.getElementById("copyIdButton");
 
 const copyMyIdButton =
-  document.getElementById(
-    "copyMyIdButton"
-  );
+  document.getElementById("copyMyIdButton");
 
 const micButton =
-  document.getElementById(
-    "micButton"
-  );
+  document.getElementById("micButton");
 
 const cameraButton =
-  document.getElementById(
-    "cameraButton"
-  );
+  document.getElementById("cameraButton");
 
 const switchCameraButton =
-  document.getElementById(
-    "switchCameraButton"
-  );
+  document.getElementById("switchCameraButton");
 
 const hangupButton =
-  document.getElementById(
-    "hangupButton"
-  );
+  document.getElementById("hangupButton");
 
 const toast =
-  document.getElementById(
-    "toast"
-  );
+  document.getElementById("toast");
 
 
 /*
@@ -161,9 +107,14 @@ let remoteAudioElements = [];
 
 /*
 ==================================================
-ROOM CODE
+HELPERS
 ==================================================
 */
+
+function getRoomName(code) {
+  return "vc-" + String(code).toUpperCase();
+}
+
 
 function generateRoomCode() {
 
@@ -172,45 +123,28 @@ function generateRoomCode() {
 
   let result = "";
 
-  for (
-    let i = 0;
-    i < 6;
-    i++
-  ) {
+  for (let i = 0; i < 6; i++) {
 
-    result +=
-      alphabet[
-        Math.floor(
-          Math.random() *
-          alphabet.length
-        )
-      ];
+    result += alphabet[
+      Math.floor(
+        Math.random() * alphabet.length
+      )
+    ];
 
   }
 
   return result;
-
 }
 
-
-/*
-==================================================
-IDENTITY
-==================================================
-*/
 
 function createIdentity() {
 
   if (
     window.crypto &&
-    typeof window.crypto.randomUUID ===
-      "function"
+    typeof window.crypto.randomUUID === "function"
   ) {
 
-    return (
-      "user-" +
-      window.crypto.randomUUID()
-    );
+    return "user-" + window.crypto.randomUUID();
 
   }
 
@@ -222,26 +156,6 @@ function createIdentity() {
       .toString(36)
       .slice(2)
   );
-
-}
-
-
-/*
-==================================================
-ROOM NAME
-==================================================
-*/
-
-function getRoomName(
-  code
-) {
-
-  return (
-    "vc-" +
-    String(code)
-      .toUpperCase()
-  );
-
 }
 
 
@@ -251,39 +165,19 @@ STATUS
 ==================================================
 */
 
-function setConnectionStatus(
-  text
-) {
+function setConnectionStatus(text) {
 
-  if (
-    connectionStatus
-  ) {
-
-    connectionStatus.textContent =
-      text;
-
+  if (connectionStatus) {
+    connectionStatus.textContent = text;
   }
 
 }
 
 
-/*
-==================================================
-START STATUS
-==================================================
-*/
+function setStartStatus(text) {
 
-function setStartStatus(
-  text
-) {
-
-  if (
-    startStatus
-  ) {
-
-    startStatus.textContent =
-      text;
-
+  if (startStatus) {
+    startStatus.textContent = text;
   }
 
 }
@@ -295,86 +189,81 @@ TOAST
 ==================================================
 */
 
-function showToast(
-  message
-) {
+function showToast(message) {
 
   if (!toast) {
-
     return;
-
   }
 
-  toast.textContent =
-    message;
+  toast.textContent = message;
 
-  toast.classList.remove(
-    "hidden"
-  );
+  toast.classList.remove("hidden");
 
+  clearTimeout(showToast.timer);
 
-  clearTimeout(
-    showToast.timer
-  );
+  showToast.timer = setTimeout(() => {
 
+    toast.classList.add("hidden");
 
-  showToast.timer =
-    setTimeout(
-      () => {
-
-        toast.classList.add(
-          "hidden"
-        );
-
-      },
-      2500
-    );
+  }, 2500);
 
 }
 
 
 /*
 ==================================================
-SHOW START
+SCREENS
 ==================================================
 */
 
 function showStartScreen() {
 
-  startScreen
-    ?.classList
-    .remove(
-      "hidden"
-    );
+  startScreen?.classList.remove("hidden");
 
-  callScreen
-    ?.classList
-    .add(
-      "hidden"
-    );
+  callScreen?.classList.add("hidden");
+
+}
+
+
+function showCallScreen() {
+
+  startScreen?.classList.add("hidden");
+
+  callScreen?.classList.remove("hidden");
 
 }
 
 
 /*
 ==================================================
-SHOW CALL
+CODE PANEL
 ==================================================
 */
 
-function showCallScreen() {
+function showCodePanel() {
 
-  startScreen
-    ?.classList
-    .add(
-      "hidden"
-    );
+  const panel =
+    document.querySelector(".my-id-panel");
 
-  callScreen
-    ?.classList
-    .remove(
-      "hidden"
-    );
+  if (!panel) {
+    return;
+  }
+
+  panel.classList.remove("connected");
+
+}
+
+
+function hideCodePanel() {
+
+  const panel =
+    document.querySelector(".my-id-panel");
+
+  if (!panel) {
+    return;
+  }
+
+  panel.classList.add("connected");
 
 }
 
@@ -385,51 +274,33 @@ COPY
 ==================================================
 */
 
-async function copyText(
-  text
-) {
+async function copyText(text) {
 
   try {
 
-    await navigator.clipboard.writeText(
-      text
-    );
+    await navigator.clipboard.writeText(text);
 
-    showToast(
-      "Код скопирован."
-    );
+    showToast("Код скопирован.");
 
   } catch {
 
     const textarea =
-      document.createElement(
-        "textarea"
-      );
+      document.createElement("textarea");
 
-    textarea.value =
-      text;
+    textarea.value = text;
 
-    textarea.style.position =
-      "fixed";
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
 
-    textarea.style.opacity =
-      "0";
-
-    document.body.appendChild(
-      textarea
-    );
+    document.body.appendChild(textarea);
 
     textarea.select();
 
-    document.execCommand(
-      "copy"
-    );
+    document.execCommand("copy");
 
     textarea.remove();
 
-    showToast(
-      "Код скопирован."
-    );
+    showToast("Код скопирован.");
 
   }
 
@@ -438,55 +309,76 @@ async function copyText(
 
 /*
 ==================================================
-GET TOKEN
+GET LIVEKIT TOKEN
 ==================================================
 */
 
-async function getLiveKitToken(
-  code
-) {
+async function getLiveKitToken(code) {
 
   const response =
-    await fetch(
-      "/api/livekit/token",
-      {
+    await fetch("/api/livekit/token", {
 
-        method:
-          "POST",
+      method: "POST",
 
-        headers: {
+      headers: {
+        "Content-Type": "application/json"
+      },
 
-          "Content-Type":
-            "application/json"
+      body: JSON.stringify({
 
-        },
+        roomCode: code,
 
-        body:
-          JSON.stringify({
+        identity: identity
 
-            roomCode:
-              code,
+      })
 
-            identity
+    });
 
-          })
 
-      }
+  let data = {};
+
+  try {
+
+    data = await response.json();
+
+  } catch {
+
+    throw new Error(
+      "Сервер вернул некорректный ответ."
     );
 
-
-  const data =
-    await response.json();
+  }
 
 
-  if (
-    !response.ok ||
-    !data.ok
-  ) {
+  if (!response.ok) {
 
     throw new Error(
       data.error ||
       "Не удалось получить токен LiveKit."
+    );
+
+  }
+
+
+  /*
+  Поддерживаем основной формат:
+  
+  {
+    ok: true,
+    serverUrl: "...",
+    participantToken: "..."
+  }
+  */
+
+  if (
+    data.ok === false ||
+    !data.serverUrl ||
+    !data.participantToken
+  ) {
+
+    throw new Error(
+      data.error ||
+      "Сервер не вернул данные LiveKit."
     );
 
   }
@@ -499,15 +391,13 @@ async function getLiveKitToken(
 
 /*
 ==================================================
-CONNECT TO LIVEKIT
+CONNECT TO ROOM
 ==================================================
 */
 
-async function connectToRoom(
-  code
-) {
+async function connectToRoom(code) {
 
-  if (!LIVEKIT) {
+  if (!LIVEKIT || !Room) {
 
     throw new Error(
       "LiveKit SDK не загружен."
@@ -519,20 +409,11 @@ async function connectToRoom(
   roomCode =
     String(code)
       .toUpperCase()
-      .replace(
-        /[^A-Z0-9]/g,
-        ""
-      )
-      .slice(
-        0,
-        6
-      );
+      .replace(/[^A-Z0-9]/g, "")
+      .slice(0, 6);
 
 
-  if (
-    roomCode.length !==
-    6
-  ) {
+  if (roomCode.length !== 6) {
 
     throw new Error(
       "Код должен содержать 6 символов."
@@ -543,16 +424,12 @@ async function connectToRoom(
 
   if (!identity) {
 
-    identity =
-      createIdentity();
+    identity = createIdentity();
 
   }
 
 
-  setConnectionStatus(
-    "Подключение..."
-  );
-
+  setConnectionStatus("Подключение...");
 
   setStartStatus(
     "Подключение к видеозвонку..."
@@ -560,26 +437,21 @@ async function connectToRoom(
 
 
   const credentials =
-    await getLiveKitToken(
-      roomCode
-    );
+    await getLiveKitToken(roomCode);
 
 
-  room =
-    new Room({
+  room = new Room({
 
-      adaptiveStream:
-        true,
+    adaptiveStream: true,
 
-      dynacast:
-        true
+    dynacast: true
 
-    });
+  });
 
 
   /*
   ========================================
-  EVENTS
+  CONNECTED
   ========================================
   */
 
@@ -595,45 +467,51 @@ async function connectToRoom(
   );
 
 
+  /*
+  ========================================
+  PARTICIPANT CONNECTED
+  ========================================
+  */
+
   room.on(
-  RoomEvent.ParticipantConnected,
-  participant => {
+    RoomEvent.ParticipantConnected,
+    participant => {
 
-    console.log(
-      "Participant connected:",
-      participant.identity
-    );
-
-    setConnectionStatus(
-      "Собеседник подключён"
-    );
-
-
-    /*
-    ========================================
-    СКРЫВАЕМ ПАНЕЛЬ КОДА
-    ========================================
-    */
-
-    document
-      .querySelector(".my-id-panel")
-      ?.classList.add(
-        "connected"
+      console.log(
+        "Participant connected:",
+        participant.identity
       );
 
 
-    if (
-      remotePlaceholderText
-    ) {
+      setConnectionStatus(
+        "Собеседник подключён"
+      );
 
-      remotePlaceholderText.textContent =
-        "Собеседник подключён";
+
+      /*
+      Скрываем панель
+      с кодом звонка.
+      */
+
+      hideCodePanel();
+
+
+      if (remotePlaceholderText) {
+
+        remotePlaceholderText.textContent =
+          "Собеседник подключён";
+
+      }
 
     }
+  );
 
-  }
-);
 
+  /*
+  ========================================
+  PARTICIPANT DISCONNECTED
+  ========================================
+  */
 
   room.on(
     RoomEvent.ParticipantDisconnected,
@@ -644,35 +522,43 @@ async function connectToRoom(
         participant.identity
       );
 
+
       clearRemoteMedia();
+
 
       setConnectionStatus(
         "Собеседник отключился"
       );
-      document
-  .querySelector(".my-id-panel")
-  ?.classList.remove(
-    "connected"
-  );
 
-      if (
-        remotePlaceholderText
-      ) {
+
+      /*
+      Возвращаем панель кода.
+      */
+
+      showCodePanel();
+
+
+      if (remotePlaceholderText) {
 
         remotePlaceholderText.textContent =
           "Ожидание собеседника...";
 
       }
 
+
       remotePlaceholder
         ?.classList
-        .remove(
-          "hidden"
-        );
+        .remove("hidden");
 
     }
   );
 
+
+  /*
+  ========================================
+  TRACK SUBSCRIBED
+  ========================================
+  */
 
   room.on(
     RoomEvent.TrackSubscribed,
@@ -691,6 +577,12 @@ async function connectToRoom(
   );
 
 
+  /*
+  ========================================
+  TRACK UNSUBSCRIBED
+  ========================================
+  */
+
   room.on(
     RoomEvent.TrackUnsubscribed,
     track => {
@@ -707,6 +599,12 @@ async function connectToRoom(
   );
 
 
+  /*
+  ========================================
+  DISCONNECTED
+  ========================================
+  */
+
   room.on(
     RoomEvent.Disconnected,
     () => {
@@ -719,6 +617,12 @@ async function connectToRoom(
   );
 
 
+  /*
+  ========================================
+  RECONNECTING
+  ========================================
+  */
+
   room.on(
     RoomEvent.Reconnecting,
     () => {
@@ -730,6 +634,12 @@ async function connectToRoom(
     }
   );
 
+
+  /*
+  ========================================
+  RECONNECTED
+  ========================================
+  */
 
   room.on(
     RoomEvent.Reconnected,
@@ -763,7 +673,7 @@ async function connectToRoom(
 
   /*
   ========================================
-  LOCAL CAMERA + MICROPHONE
+  CAMERA + MICROPHONE
   ========================================
   */
 
@@ -783,12 +693,12 @@ async function connectToRoom(
 
   for (
     const participant of
-      room.remoteParticipants.values()
+    room.remoteParticipants.values()
   ) {
 
     for (
       const publication of
-        participant.trackPublications.values()
+      participant.trackPublications.values()
     ) {
 
       if (
@@ -820,6 +730,22 @@ async function connectToRoom(
 
   updateRemotePlaceholder();
 
+
+  /*
+  Если собеседник уже был в комнате,
+  сразу скрываем код.
+  */
+
+  if (room.remoteParticipants.size > 0) {
+
+    hideCodePanel();
+
+  } else {
+
+    showCodePanel();
+
+  }
+
 }
 
 
@@ -832,19 +758,13 @@ LOCAL TRACKS
 function attachLocalTracks() {
 
   if (!room) {
-
     return;
-
   }
 
 
   const participant =
     room.localParticipant;
 
-
-  /*
-  CAMERA
-  */
 
   const cameraPublication =
     participant.getTrackPublication(
@@ -863,11 +783,10 @@ function attachLocalTracks() {
         localVideo
       );
 
+
       localPlaceholder
         ?.classList
-        .add(
-          "hidden"
-        );
+        .add("hidden");
 
     } catch (error) {
 
@@ -879,15 +798,6 @@ function attachLocalTracks() {
     }
 
   }
-
-
-  /*
-  MICROPHONE
-
-  Audio is sent to LiveKit,
-  therefore no local audio
-  element is required.
-  */
 
 }
 
@@ -910,22 +820,23 @@ function handleRemoteTrack(
   );
 
 
+  /*
+  VIDEO
+  */
+
   if (
-    track.kind ===
-    Track.Kind.Video
+    track.kind === Track.Kind.Video
   ) {
 
     try {
 
-      track.attach(
-        remoteVideo
-      );
+      track.attach(remoteVideo);
 
       remotePlaceholder
         ?.classList
-        .add(
-          "hidden"
-        );
+        .add("hidden");
+
+      hideCodePanel();
 
     } catch (error) {
 
@@ -939,9 +850,12 @@ function handleRemoteTrack(
   }
 
 
+  /*
+  AUDIO
+  */
+
   if (
-    track.kind ===
-    Track.Kind.Audio
+    track.kind === Track.Kind.Audio
   ) {
 
     try {
@@ -949,22 +863,18 @@ function handleRemoteTrack(
       const audio =
         track.attach();
 
-      audio.autoplay =
-        true;
 
-      audio.playsInline =
-        true;
+      audio.autoplay = true;
 
-      audio.style.display =
-        "none";
+      audio.playsInline = true;
 
-      document.body.appendChild(
-        audio
-      );
+      audio.style.display = "none";
 
-      remoteAudioElements.push(
-        audio
-      );
+
+      document.body.appendChild(audio);
+
+
+      remoteAudioElements.push(audio);
 
     } catch (error) {
 
@@ -995,9 +905,7 @@ function updateRemotePlaceholder() {
 
     remotePlaceholder
       ?.classList
-      .remove(
-        "hidden"
-      );
+      .remove("hidden");
 
     return;
 
@@ -1005,8 +913,7 @@ function updateRemotePlaceholder() {
 
 
   const hasRemoteParticipant =
-    room.remoteParticipants.size >
-    0;
+    room.remoteParticipants.size > 0;
 
 
   const cameraPublication =
@@ -1014,38 +921,32 @@ function updateRemotePlaceholder() {
       ? Array.from(
           room.remoteParticipants.values()
         )
-          .map(
-            participant =>
-              participant.getTrackPublication(
-                Track.Source.Camera
-              )
-          )
-          .find(
-            publication =>
-              publication &&
-              publication.isSubscribed &&
-              publication.track
-          )
+        .map(
+          participant =>
+            participant.getTrackPublication(
+              Track.Source.Camera
+            )
+        )
+        .find(
+          publication =>
+            publication &&
+            publication.isSubscribed &&
+            publication.track
+        )
       : null;
 
 
-  if (
-    cameraPublication
-  ) {
+  if (cameraPublication) {
 
     remotePlaceholder
       ?.classList
-      .add(
-        "hidden"
-      );
+      .add("hidden");
 
   } else {
 
     remotePlaceholder
       ?.classList
-      .remove(
-        "hidden"
-      );
+      .remove("hidden");
 
   }
 
@@ -1061,16 +962,13 @@ MICROPHONE
 async function toggleMicrophone() {
 
   if (!room) {
-
     return;
-
   }
 
 
   try {
 
-    micEnabled =
-      !micEnabled;
+    micEnabled = !micEnabled;
 
 
     await room
@@ -1082,16 +980,16 @@ async function toggleMicrophone() {
 
     updateControls();
 
-
   } catch (error) {
 
-    micEnabled =
-      !micEnabled;
+    micEnabled = !micEnabled;
+
 
     console.error(
       "Microphone error:",
       error
     );
+
 
     showToast(
       "Не удалось изменить микрофон."
@@ -1111,16 +1009,13 @@ CAMERA
 async function toggleCamera() {
 
   if (!room) {
-
     return;
-
   }
 
 
   try {
 
-    cameraEnabled =
-      !cameraEnabled;
+    cameraEnabled = !cameraEnabled;
 
 
     await room
@@ -1130,9 +1025,7 @@ async function toggleCamera() {
       );
 
 
-    if (
-      cameraEnabled
-    ) {
+    if (cameraEnabled) {
 
       attachLocalTracks();
 
@@ -1163,25 +1056,23 @@ async function toggleCamera() {
 
       localPlaceholder
         ?.classList
-        .remove(
-          "hidden"
-        );
+        .remove("hidden");
 
     }
 
 
     updateControls();
 
-
   } catch (error) {
 
-    cameraEnabled =
-      !cameraEnabled;
+    cameraEnabled = !cameraEnabled;
+
 
     console.error(
       "Camera error:",
       error
     );
+
 
     showToast(
       "Не удалось изменить камеру."
@@ -1201,9 +1092,7 @@ SWITCH CAMERA
 async function switchCamera() {
 
   if (!room) {
-
     return;
-
   }
 
 
@@ -1229,9 +1118,7 @@ async function switchCamera() {
     publication?.track;
 
 
-  if (
-    !track
-  ) {
+  if (!track) {
 
     showToast(
       "Камера ещё не готова."
@@ -1245,23 +1132,17 @@ async function switchCamera() {
   try {
 
     facingMode =
-      facingMode ===
-      "user"
+      facingMode === "user"
         ? "environment"
         : "user";
 
 
     await track.restartTrack({
-
       facingMode
-
     });
 
 
-    track.attach(
-      localVideo
-    );
-
+    track.attach(localVideo);
 
   } catch (error) {
 
@@ -1272,12 +1153,8 @@ async function switchCamera() {
 
 
     /*
-    Некоторые устройства
-    не поддерживают facingMode.
-
-    В этом случае пробуем
-    переключить устройство
-    через список камер.
+    FALLBACK:
+    переключение через устройства
     */
 
     try {
@@ -1288,10 +1165,7 @@ async function switchCamera() {
         );
 
 
-      if (
-        devices.length >=
-        2
-      ) {
+      if (devices.length >= 2) {
 
         const currentDeviceId =
           await track.getDeviceId();
@@ -1316,14 +1190,11 @@ async function switchCamera() {
 
         await room.switchActiveDevice(
           "videoinput",
-          devices[nextIndex]
-            .deviceId
+          devices[nextIndex].deviceId
         );
 
 
-        track.attach(
-          localVideo
-        );
+        track.attach(localVideo);
 
       } else {
 
@@ -1333,14 +1204,13 @@ async function switchCamera() {
 
       }
 
-    } catch (
-      fallbackError
-    ) {
+    } catch (fallbackError) {
 
       console.error(
         "Fallback camera error:",
         fallbackError
       );
+
 
       showToast(
         "Не удалось переключить камеру."
@@ -1368,6 +1238,7 @@ function updateControls() {
         ? "🎙️"
         : "🔇";
 
+
     micButton.classList.toggle(
       "off",
       !micEnabled
@@ -1382,6 +1253,7 @@ function updateControls() {
       cameraEnabled
         ? "📷"
         : "🚫";
+
 
     cameraButton.classList.toggle(
       "off",
@@ -1405,49 +1277,42 @@ function clearRemoteMedia() {
 
     if (remoteVideo) {
 
-      remoteVideo.srcObject =
-        null;
+      remoteVideo.srcObject = null;
 
     }
 
   } catch {}
 
 
-  remoteAudioElements
-    .forEach(
-      audio => {
+  remoteAudioElements.forEach(
+    audio => {
 
-        try {
+      try {
 
-          audio.remove();
+        audio.remove();
 
-        } catch {}
+      } catch {}
 
-      }
-    );
-
-
-  remoteAudioElements =
-    [];
+    }
+  );
 
 
-  if (
-    room
-  ) {
+  remoteAudioElements = [];
+
+
+  if (room) {
 
     for (
       const participant of
-        room.remoteParticipants.values()
+      room.remoteParticipants.values()
     ) {
 
       for (
         const publication of
-          participant.trackPublications.values()
+        participant.trackPublications.values()
       ) {
 
-        if (
-          publication.track
-        ) {
+        if (publication.track) {
 
           try {
 
@@ -1474,20 +1339,11 @@ HANGUP
 
 async function hangup() {
 
-  /*
-  Отключаем LiveKit.
-  LiveKit сам остановит
-  опубликованные локальные
-  tracks при disconnect(true).
-  */
-
   if (room) {
 
     try {
 
-      await room.disconnect(
-        true
-      );
+      await room.disconnect(true);
 
     } catch (error) {
 
@@ -1501,37 +1357,28 @@ async function hangup() {
   }
 
 
-  room =
-    null;
+  room = null;
 
 
   clearRemoteMedia();
 
 
-  /*
-  Локальное видео.
-  */
-
   try {
 
-    localVideo.srcObject =
-      null;
+    localVideo.srcObject = null;
 
   } catch {}
 
 
   /*
-  Сбрасываем состояние.
+  RESET
   */
 
-  micEnabled =
-    true;
+  micEnabled = true;
 
-  cameraEnabled =
-    true;
+  cameraEnabled = true;
 
-  facingMode =
-    "user";
+  facingMode = "user";
 
 
   updateControls();
@@ -1539,15 +1386,19 @@ async function hangup() {
 
   localPlaceholder
     ?.classList
-    .remove(
-      "hidden"
-    );
+    .remove("hidden");
+
 
   remotePlaceholder
     ?.classList
-    .remove(
-      "hidden"
-    );
+    .remove("hidden");
+
+
+  /*
+  Возвращаем панель кода.
+  */
+
+  showCodePanel();
 
 
   setConnectionStatus(
@@ -1558,9 +1409,7 @@ async function hangup() {
   showStartScreen();
 
 
-  setStartStatus(
-    ""
-  );
+  setStartStatus("");
 
 
   showToast(
@@ -1580,11 +1429,9 @@ async function createCall() {
 
   try {
 
-    startButton.disabled =
-      true;
+    startButton.disabled = true;
 
-    joinButton.disabled =
-      true;
+    joinButton.disabled = true;
 
 
     roomCode =
@@ -1599,6 +1446,9 @@ async function createCall() {
       roomCode;
 
 
+    showCodePanel();
+
+
     await connectToRoom(
       roomCode
     );
@@ -1609,9 +1459,7 @@ async function createCall() {
     );
 
 
-    if (
-      remotePlaceholderText
-    ) {
+    if (remotePlaceholderText) {
 
       remotePlaceholderText.textContent =
         "Ожидание собеседника...";
@@ -1623,13 +1471,13 @@ async function createCall() {
       "Звонок создан. Передайте код собеседнику."
     );
 
-
   } catch (error) {
 
     console.error(
       "Create call error:",
       error
     );
+
 
     showStartStatus(
       error.message ||
@@ -1638,11 +1486,9 @@ async function createCall() {
 
   } finally {
 
-    startButton.disabled =
-      false;
+    startButton.disabled = false;
 
-    joinButton.disabled =
-      false;
+    joinButton.disabled = false;
 
   }
 
@@ -1659,8 +1505,7 @@ async function joinCall() {
 
   const code =
     String(
-      remoteIdInput.value ||
-      ""
+      remoteIdInput?.value || ""
     )
       .toUpperCase()
       .replace(
@@ -1673,10 +1518,7 @@ async function joinCall() {
       );
 
 
-  if (
-    code.length !==
-    6
-  ) {
+  if (code.length !== 6) {
 
     setStartStatus(
       "Введите правильный 6-значный код."
@@ -1689,34 +1531,31 @@ async function joinCall() {
 
   try {
 
-    startButton.disabled =
-      true;
+    startButton.disabled = true;
 
-    joinButton.disabled =
-      true;
+    joinButton.disabled = true;
 
 
     identity =
       createIdentity();
 
 
-    roomCode =
-      code;
+    roomCode = code;
 
 
     myPeerId.textContent =
       code;
 
 
-    await connectToRoom(
-      code
-    );
+    showCodePanel();
+
+
+    await connectToRoom(code);
 
 
     setConnectionStatus(
       "Подключено. Ожидание видео..."
     );
-
 
   } catch (error) {
 
@@ -1736,24 +1575,19 @@ async function joinCall() {
 
       try {
 
-        await room.disconnect(
-          true
-        );
+        await room.disconnect(true);
 
       } catch {}
 
-      room =
-        null;
+      room = null;
 
     }
 
   } finally {
 
-    startButton.disabled =
-      false;
+    startButton.disabled = false;
 
-    joinButton.disabled =
-      false;
+    joinButton.disabled = false;
 
   }
 
@@ -1770,13 +1604,9 @@ copyIdButton?.addEventListener(
   "click",
   () => {
 
-    if (
-      roomCode
-    ) {
+    if (roomCode) {
 
-      copyText(
-        roomCode
-      );
+      copyText(roomCode);
 
     }
 
@@ -1788,13 +1618,9 @@ copyMyIdButton?.addEventListener(
   "click",
   () => {
 
-    if (
-      roomCode
-    ) {
+    if (roomCode) {
 
-      copyText(
-        roomCode
-      );
+      copyText(roomCode);
 
     }
 
@@ -1874,10 +1700,7 @@ remoteIdInput?.addEventListener(
   "keydown",
   event => {
 
-    if (
-      event.key ===
-      "Enter"
-    ) {
+    if (event.key === "Enter") {
 
       joinCall();
 
@@ -1898,15 +1721,9 @@ document.addEventListener(
   () => {
 
     if (
-      document.visibilityState ===
-      "visible" &&
+      document.visibilityState === "visible" &&
       room
     ) {
-
-      /*
-      LiveKit сам занимается
-      восстановлением соединения.
-      */
 
       console.log(
         "PWA visible, room:",
@@ -1927,8 +1744,27 @@ INITIAL STATE
 
 showStartScreen();
 
+showCodePanel();
+
 updateControls();
 
-console.log(
-  "Video Call PWA — LiveKit"
-);
+
+/*
+==================================================
+NO ALERTS
+==================================================
+
+Никаких alert("LiveKit загружен")
+здесь больше нет.
+
+При запуске ничего всплывающего
+показываться не будет.
+*/
+
+if (LIVEKIT) {
+
+  console.log(
+    "Video Call PWA готов."
+  );
+
+}
