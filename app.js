@@ -950,28 +950,170 @@ HANG UP
 
 function hangup() {
 
+  /*
+  ========================================
+  ЗАКРЫВАЕМ WEBRTC ЗВОНОК
+  ========================================
+  */
+
   if (currentCall) {
 
     try {
 
       currentCall.close();
 
-    } catch {}
+    } catch (error) {
+
+      console.error(
+        "Ошибка завершения звонка:",
+        error
+      );
+
+    }
 
   }
 
   currentCall = null;
 
-  remoteVideo.srcObject =
-    null;
 
-  remotePlaceholder.classList.remove(
-    "hidden"
-  );
+  /*
+  ========================================
+  ОСТАНАВЛИВАЕМ КАМЕРУ И МИКРОФОН
+  ========================================
+  */
+
+  if (localStream) {
+
+    localStream
+      .getTracks()
+      .forEach(
+        track => {
+
+          try {
+
+            track.stop();
+
+          } catch {}
+
+        }
+      );
+
+  }
+
+  localStream = null;
+
+
+  /*
+  ========================================
+  ОЧИЩАЕМ VIDEO
+  ========================================
+  */
+
+  if (localVideo) {
+
+    localVideo.srcObject =
+      null;
+
+  }
+
+  if (remoteVideo) {
+
+    remoteVideo.srcObject =
+      null;
+
+  }
+
+
+  /*
+  ========================================
+  ВОЗВРАЩАЕМ PLACEHOLDER
+  ========================================
+  */
+
+  if (remotePlaceholder) {
+
+    remotePlaceholder.classList.remove(
+      "hidden"
+    );
+
+  }
+
+  if (localPlaceholder) {
+
+    localPlaceholder.classList.remove(
+      "hidden"
+    );
+
+  }
+
+
+  /*
+  ========================================
+  СБРАСЫВАЕМ СОСТОЯНИЕ
+  ========================================
+  */
+
+  micEnabled = true;
+
+  cameraEnabled = true;
+
+  currentCamera = "user";
+
+
+  /*
+  ========================================
+  СБРАСЫВАЕМ КНОПКИ
+  ========================================
+  */
+
+  if (micButton) {
+
+    micButton.textContent =
+      "🎙️";
+
+    micButton.classList.remove(
+      "off"
+    );
+
+  }
+
+  if (cameraButton) {
+
+    cameraButton.textContent =
+      "📷";
+
+    cameraButton.classList.remove(
+      "off"
+    );
+
+  }
+
+
+  /*
+  ========================================
+  СТАТУС
+  ========================================
+  */
 
   setConnectionStatus(
     "Звонок завершён"
   );
+
+
+  /*
+  ========================================
+  ВОЗВРАЩАЕМСЯ НА ГЛАВНЫЙ ЭКРАН
+  ========================================
+  */
+
+  showStartScreen();
+
+
+  /*
+  ========================================
+  СООБЩЕНИЕ
+  ========================================
+  */
 
   showToast(
     "Звонок завершён."
