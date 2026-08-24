@@ -6,7 +6,10 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-import { WebSocketServer } from "ws";
+import {
+  AccessToken,
+  RoomServiceClient
+} from "livekit-server-sdk";
 
 
 /*
@@ -16,14 +19,10 @@ PATHS
 */
 
 const __filename =
-  fileURLToPath(
-    import.meta.url
-  );
+  fileURLToPath(import.meta.url);
 
 const __dirname =
-  path.dirname(
-    __filename
-  );
+  path.dirname(__filename);
 
 const ROOT =
   path.resolve(
@@ -40,50 +39,410 @@ PORT
 
 const PORT =
   Number(
-    process.env.PORT ||
-    3000
+    process.env.PORT || 3000
   );
 
 
 /*
 ==================================================
-TURN CONFIG
+LIVEKIT
 ==================================================
 
-Добавь эти переменные
-на сервере:
+ВАЖНО:
 
-TURN_USERNAME
-TURN_CREDENTIAL
+Эти значения должны находиться
+ТОЛЬКО в переменных окружения сервера.
 
-TURN_URL можно не задавать.
+LIVEKIT_URL
+LIVEKIT_API_KEY
+LIVEKIT_API_SECRET
+
+API SECRET никогда не помещаем
+в frontend.
 ==================================================
 */
 
-const TURN_USERNAME =
-  process.env.TURN_USERNAME ||
+const LIVEKIT_URL =
+  process.env.LIVEKIT_URL ||
+  "wss://videocall-p12xui02.livekit.cloud";
+
+const LIVEKIT_API_KEY =
+  process.env.LIVEKIT_API_KEY ||
   "";
 
-const TURN_CREDENTIAL =
-  process.env.TURN_CREDENTIAL ||
+const LIVEKIT_API_SECRET =
+  process.env.LIVEKIT_API_SECRET ||
   "";
-
-const TURN_HOST =
-  process.env.TURN_HOST ||
-  "global.relay.metered.ca";
 
 
 /*
 ==================================================
-ROOMS
-==================================================
-
-roomId -> Set<WebSocket>
+ПРОВЕРКА LIVEKIT
 ==================================================
 */
 
-const rooms =
-  new Map();
+function livekitConfigured() {
+
+  return (
+    Boolean(LIVEKIT_URL) &&
+    Boolean(LIVEKIT_API_KEY) &&
+    Boolean(LIVEKIT_API_SECRET)
+  );
+
+}
+
+
+/*
+==================================================
+LIVEKIT ROOM SERVICE
+==================================================
+*/
+
+const livekitHost =
+  LIVEKIT_URL
+    .replace(
+      /^wss:/,
+      "https:"
+    )
+    .replace(
+      /^ws:/,
+      "http:"
+    );
+
+const roomService =
+  livekitConfigured()
+    ? new RoomServiceClient(
+        livekitHost,
+        LIVEKIT_API_KEY,
+        LIVEKIT_API_SECRET
+      )
+    : null;
+
+
+/*
+==================================================
+HTTP HELPERS
+==================================================
+*/
+
+function sendJSON(
+  res,
+  status,
+  data
+) {
+
+  res.writeHead(
+    status,
+    {
+      "Content-Type":
+        "application/json; charset=utf-8",
+
+      "Cache-Control":
+        "no-store",
+
+      "Access-Control-Allow-Origin":
+        "*",
+
+      "Access-Control-Allow-Headers":
+        "Content-Type",
+
+      "Access-Control-Allow-Methods":
+        "GET, POST, OPTIONS"
+    }
+  );
+
+  res.end(
+    JSON.stringify(data)
+  );
+
+}
+
+
+/*
+==================================================
+READ JSON BODY
+==================================================
+*/
+
+function readJSON(req) {
+
+  return new Promise(
+    (resolve, reject) => {
+
+      let body = "";
+
+      req.on(
+        "data",
+        chunk => {
+
+          body += chunk.toString();
+
+          if (
+            body.length >
+            1024 * 100
+          ) {
+
+            reject(
+              new Error(
+                "Request body too large"
+              )
+            );
+
+            req.destroy();
+
+          }
+
+        }
+      );
+
+      req.on(
+        "end",
+        () => {
+
+          if (!body) {
+
+            resolve({});
+
+            return;
+
+          }
+
+          try {
+
+            resolve(
+              JSON.parse(body)
+            );
+
+          } catch {
+
+            reject(
+              new Error(
+                "Invalid JSON"
+              )
+            );
+
+          }
+
+        }
+      );
+
+      req.on(
+        "error",
+        reject
+      );
+
+    }
+  );
+
+}
+
+
+/*
+==================================================
+ROOM CODE
+==================================================
+*/
+
+function normalizeRoomCode(
+  value
+) {
+
+  return String(
+    value || ""
+  )
+    .toUpperCase()
+    .replace(
+      /[^A-Z0-9]/g,
+      ""
+    )
+    .slice(
+      0,
+      6
+    );
+
+}
+
+
+/*
+==================================================
+IDENTITY
+==================================================
+*/
+
+function normalizeIdentity(
+  value
+) {
+
+  const identity =
+    String(
+      value || ""
+    )
+      .trim()
+      .slice(
+        0,
+        100
+      );
+
+  if (!identity) {
+
+    return (
+      "user-" +
+      crypto.randomUUID()
+    );
+
+  }
+
+  return identity;
+
+}
+
+
+/*
+==================================================
+CREATE LIVEKIT TOKEN
+==================================================
+*/
+
+async function createLiveKitToken(
+  roomCode,
+  identity
+) {
+
+  if (!livekitConfigured()) {
+
+    throw new Error(
+      "LiveKit не настроен на сервере. " +
+      "Добавьте LIVEKIT_API_KEY и LIVEKIT_API_SECRET."
+    );
+
+  }
+
+  const roomName =
+    "vc-" +
+    roomCode;
+
+
+  /*
+  Создаём комнату заранее.
+
+  Если она уже существует —
+  просто продолжаем.
+
+  Максимум 2 участника.
+  */
+
+  if (roomService) {
+
+    try {
+
+      await roomService.createRoom({
+
+        name:
+          roomName,
+
+        emptyTimeout:
+          300,
+
+        maxParticipants:
+          2
+
+      });
+
+    } catch (error) {
+
+      /*
+      Комната уже существует —
+      это нормально.
+
+      Для других ошибок
+      продолжаем к token generation,
+      потому что LiveKit может
+      сообщить о состоянии комнаты
+      отдельно.
+      */
+
+      const message =
+        String(
+          error?.message ||
+          ""
+        ).toLowerCase();
+
+      if (
+        !message.includes(
+          "already exists"
+        ) &&
+        !message.includes(
+          "already_exist"
+        ) &&
+        !message.includes(
+          "resource_exhausted"
+        )
+      ) {
+
+        console.warn(
+          "LiveKit createRoom:",
+          error.message
+        );
+
+      }
+
+    }
+
+  }
+
+
+  /*
+  Создаём короткоживущий токен.
+
+  TTL = 2 часа.
+  */
+
+  const token =
+    new AccessToken(
+      LIVEKIT_API_KEY,
+      LIVEKIT_API_SECRET,
+      {
+        identity,
+
+        ttl:
+          "2h"
+      }
+    );
+
+
+  token.addGrant({
+
+    roomJoin:
+      true,
+
+    room:
+      roomName,
+
+    canPublish:
+      true,
+
+    canSubscribe:
+      true
+
+  });
+
+
+  const participantToken =
+    await token.toJwt();
+
+
+  return {
+
+    serverUrl:
+      LIVEKIT_URL,
+
+    participantToken,
+
+    roomName
+
+  };
+
+}
 
 
 /*
@@ -94,857 +453,326 @@ HTTP SERVER
 
 const server =
   http.createServer(
-    (req, res) => {
+    async (
+      req,
+      res
+    ) => {
 
-      /*
-      -------------------------------
-      TURN CONFIG
-      -------------------------------
-      */
+      try {
 
-      if (
-        req.url ===
-        "/turn"
-      ) {
+        /*
+        ==========================================
+        OPTIONS
+        ==========================================
+        */
 
-        const iceServers = [
+        if (
+          req.method ===
+          "OPTIONS"
+        ) {
 
-          {
-            urls:
-              "stun:stun.relay.metered.ca:80"
+          sendJSON(
+            res,
+            204,
+            {}
+          );
+
+          return;
+
+        }
+
+
+        /*
+        ==========================================
+        HEALTH
+        ==========================================
+        */
+
+        if (
+          req.url ===
+            "/health" ||
+          req.url ===
+            "/api/health"
+        ) {
+
+          sendJSON(
+            res,
+            200,
+            {
+              ok:
+                true,
+
+              livekit:
+                livekitConfigured()
+            }
+          );
+
+          return;
+
+        }
+
+
+        /*
+        ==========================================
+        LIVEKIT TOKEN
+        ==========================================
+        */
+
+        if (
+          req.url ===
+            "/api/livekit/token" &&
+          req.method ===
+            "POST"
+        ) {
+
+          const body =
+            await readJSON(req);
+
+
+          const roomCode =
+            normalizeRoomCode(
+              body.roomCode
+            );
+
+
+          if (
+            roomCode.length !==
+            6
+          ) {
+
+            sendJSON(
+              res,
+              400,
+              {
+                ok:
+                  false,
+
+                error:
+                  "Неверный код звонка."
+              }
+            );
+
+            return;
+
           }
 
-        ];
+
+          const identity =
+            normalizeIdentity(
+              body.identity
+            );
+
+
+          const result =
+            await createLiveKitToken(
+              roomCode,
+              identity
+            );
+
+
+          sendJSON(
+            res,
+            200,
+            {
+              ok:
+                true,
+
+              ...result
+            }
+          );
+
+          return;
+
+        }
+
+
+        /*
+        ==========================================
+        STATIC FILES
+        ==========================================
+        */
+
+        let requestPath =
+          req.url
+            .split("?")[0];
 
 
         if (
-          TURN_USERNAME &&
-          TURN_CREDENTIAL
+          requestPath ===
+          "/"
         ) {
 
-          iceServers.push(
-
-            {
-              urls:
-                `turn:${TURN_HOST}:80`,
-
-              username:
-                TURN_USERNAME,
-
-              credential:
-                TURN_CREDENTIAL
-            },
-
-            {
-              urls:
-                `turn:${TURN_HOST}:80?transport=tcp`,
-
-              username:
-                TURN_USERNAME,
-
-              credential:
-                TURN_CREDENTIAL
-            },
-
-            {
-              urls:
-                `turn:${TURN_HOST}:443`,
-
-              username:
-                TURN_USERNAME,
-
-              credential:
-                TURN_CREDENTIAL
-            },
-
-            {
-              urls:
-                `turns:${TURN_HOST}:443?transport=tcp`,
-
-              username:
-                TURN_USERNAME,
-
-              credential:
-                TURN_CREDENTIAL
-            }
-
-          );
+          requestPath =
+            "/index.html";
 
         }
 
 
-        res.writeHead(
-          200,
-          {
-            "Content-Type":
-              "application/json",
+        /*
+        Защита от path traversal.
+        */
 
-            "Cache-Control":
-              "no-store",
+        const safePath =
+          path.normalize(
+            requestPath
+          );
 
-            "Access-Control-Allow-Origin":
-              "*"
-          }
-        );
 
-        res.end(
-          JSON.stringify(
-            {
-              iceServers
-            }
+        if (
+          safePath.includes(
+            ".."
           )
-        );
-
-        return;
-
-      }
-
-
-      /*
-      -------------------------------
-      STATIC FILE
-      -------------------------------
-      */
-
-      let requestPath =
-        req.url
-          .split("?")[0];
-
-
-      if (
-        requestPath ===
-        "/"
-      ) {
-
-        requestPath =
-          "/index.html";
-
-      }
-
-
-      /*
-      Защита от path traversal.
-      */
-
-      const safePath =
-        path.normalize(
-          requestPath
-        );
-
-
-      if (
-        safePath.includes(
-          ".."
-        )
-      ) {
-
-        res.writeHead(
-          400
-        );
-
-        res.end(
-          "Bad request"
-        );
-
-        return;
-
-      }
-
-
-      const filePath =
-        path.join(
-          ROOT,
-          safePath
-        );
-
-
-      if (
-        !filePath.startsWith(
-          ROOT
-        )
-      ) {
-
-        res.writeHead(
-          403
-        );
-
-        res.end(
-          "Forbidden"
-        );
-
-        return;
-
-      }
-
-
-      fs.readFile(
-        filePath,
-        (
-          error,
-          data
-        ) => {
-
-          if (error) {
-
-            res.writeHead(
-              404
-            );
-
-            res.end(
-              "Not found"
-            );
-
-            return;
-
-          }
-
-
-          const ext =
-            path.extname(
-              filePath
-            )
-              .toLowerCase();
-
-
-          const contentTypes = {
-
-            ".html":
-              "text/html; charset=utf-8",
-
-            ".css":
-              "text/css; charset=utf-8",
-
-            ".js":
-              "application/javascript; charset=utf-8",
-
-            ".json":
-              "application/json; charset=utf-8",
-
-            ".svg":
-              "image/svg+xml",
-
-            ".png":
-              "image/png",
-
-            ".jpg":
-              "image/jpeg",
-
-            ".jpeg":
-              "image/jpeg",
-
-            ".webp":
-              "image/webp"
-
-          };
-
+        ) {
 
           res.writeHead(
-            200,
-            {
-              "Content-Type":
-                contentTypes[ext] ||
-                "application/octet-stream",
-
-              "Cache-Control":
-                ext === ".html"
-                  ? "no-cache"
-                  : "public, max-age=3600"
-            }
+            400
           );
-
 
           res.end(
+            "Bad request"
+          );
+
+          return;
+
+        }
+
+
+        const filePath =
+          path.join(
+            ROOT,
+            safePath
+          );
+
+
+        if (
+          !filePath.startsWith(
+            ROOT
+          )
+        ) {
+
+          res.writeHead(
+            403
+          );
+
+          res.end(
+            "Forbidden"
+          );
+
+          return;
+
+        }
+
+
+        fs.readFile(
+          filePath,
+          (
+            error,
             data
-          );
+          ) => {
 
-        }
-      );
+            if (error) {
 
-    }
-  );
+              res.writeHead(
+                404
+              );
 
+              res.end(
+                "Not found"
+              );
 
-/*
-==================================================
-WEBSOCKET
-==================================================
-*/
+              return;
 
-const wss =
-  new WebSocketServer(
-    {
-      server
-    }
-  );
+            }
 
 
-/*
-==================================================
-HELPERS
-==================================================
-*/
-
-function send(
-  ws,
-  message
-) {
-
-  if (
-    ws.readyState ===
-      ws.OPEN
-  ) {
-
-    ws.send(
-      JSON.stringify(
-        message
-      )
-    );
-
-  }
-
-}
-
-
-function broadcast(
-  room,
-  sender,
-  message
-) {
-
-  for (
-    const client of room
-  ) {
-
-    if (
-      client !== sender
-    ) {
-
-      send(
-        client,
-        message
-      );
-
-    }
-
-  }
-
-}
-
-
-/*
-==================================================
-ROOM CLEANUP
-==================================================
-*/
-
-function removeFromRoom(
-  ws
-) {
-
-  const roomId =
-    ws.roomId;
-
-  if (!roomId) {
-
-    return;
-
-  }
-
-
-  const room =
-    rooms.get(
-      roomId
-    );
-
-  if (!room) {
-
-    return;
-
-  }
-
-
-  room.delete(
-    ws
-  );
-
-
-  /*
-  Сообщаем второму пользователю.
-  */
-
-  broadcast(
-    room,
-    ws,
-    {
-      type:
-        "peer-left"
-    }
-  );
-
-
-  if (
-    room.size === 0
-  ) {
-
-    rooms.delete(
-      roomId
-    );
-
-  }
-
-
-  ws.roomId =
-    null;
-
-}
-
-
-/*
-==================================================
-WEBSOCKET CONNECTION
-==================================================
-*/
-
-wss.on(
-  "connection",
-  ws => {
-
-    ws.id =
-      crypto.randomUUID();
-
-    ws.roomId =
-      null;
-
-
-    send(
-      ws,
-      {
-        type:
-          "connected"
-      }
-    );
-
-
-    ws.on(
-      "message",
-      raw => {
-
-        try {
-
-          const message =
-            JSON.parse(
-              raw.toString()
-            );
-
-
-          const type =
-            message.type;
-
-
-          const roomId =
-            String(
-              message.roomId ||
-              ""
-            )
-              .toUpperCase()
-              .replace(
-                /[^A-Z0-9]/g,
-                ""
+            const ext =
+              path.extname(
+                filePath
               )
-              .slice(
-                0,
-                6
-              );
+                .toLowerCase();
 
 
-          /*
-          ========================================
-          CREATE
-          ========================================
-          */
+            const contentTypes = {
 
-          if (
-            type ===
-            "create"
-          ) {
+              ".html":
+                "text/html; charset=utf-8",
 
-            if (
-              !roomId
-            ) {
+              ".css":
+                "text/css; charset=utf-8",
 
-              return;
+              ".js":
+                "application/javascript; charset=utf-8",
 
-            }
+              ".json":
+                "application/json; charset=utf-8",
 
+              ".svg":
+                "image/svg+xml",
 
-            /*
-            Если сокет уже был
-            в другой комнате.
-            */
+              ".png":
+                "image/png",
 
-            removeFromRoom(
-              ws
-            );
+              ".jpg":
+                "image/jpeg",
 
+              ".jpeg":
+                "image/jpeg",
 
-            let room =
-              rooms.get(
-                roomId
-              );
+              ".webp":
+                "image/webp"
+
+            };
 
 
-            if (
-              room &&
-              room.size
-            ) {
-
-              send(
-                ws,
-                {
-                  type:
-                    "room-full"
-                }
-              );
-
-              return;
-
-            }
-
-
-            if (!room) {
-
-              room =
-                new Set();
-
-              rooms.set(
-                roomId,
-                room
-              );
-
-            }
-
-
-            room.add(
-              ws
-            );
-
-            ws.roomId =
-              roomId;
-
-
-            send(
-              ws,
+            res.writeHead(
+              200,
               {
-                type:
-                  "created"
-              }
-            );
 
-            return;
+                "Content-Type":
+                  contentTypes[ext] ||
+                  "application/octet-stream",
 
-          }
+                "Cache-Control":
+                  ext === ".html"
+                    ? "no-cache"
+                    : "public, max-age=3600"
 
-
-          /*
-          ========================================
-          JOIN
-          ========================================
-          */
-
-          if (
-            type ===
-            "join"
-          ) {
-
-            if (
-              !roomId
-            ) {
-
-              return;
-
-            }
-
-
-            const room =
-              rooms.get(
-                roomId
-              );
-
-
-            if (!room) {
-
-              send(
-                ws,
-                {
-                  type:
-                    "room-not-found"
-                }
-              );
-
-              return;
-
-            }
-
-
-            if (
-              room.size >= 2
-            ) {
-
-              send(
-                ws,
-                {
-                  type:
-                    "room-full"
-                }
-              );
-
-              return;
-
-            }
-
-
-            room.add(
-              ws
-            );
-
-            ws.roomId =
-              roomId;
-
-
-            send(
-              ws,
-              {
-                type:
-                  "joined"
               }
             );
 
 
-            broadcast(
-              room,
-              ws,
-              {
-                type:
-                  "peer-joined"
-              }
+            res.end(
+              data
             );
 
-            return;
-
           }
-
-
-          /*
-          ========================================
-          OFFER
-          ========================================
-          */
-
-          if (
-            type ===
-            "offer"
-          ) {
-
-            const room =
-              rooms.get(
-                ws.roomId
-              );
-
-            if (!room) {
-
-              return;
-
-            }
-
-            broadcast(
-              room,
-              ws,
-              {
-                type:
-                  "offer",
-
-                offer:
-                  message.offer
-              }
-            );
-
-            return;
-
-          }
-
-
-          /*
-          ========================================
-          ANSWER
-          ========================================
-          */
-
-          if (
-            type ===
-            "answer"
-          ) {
-
-            const room =
-              rooms.get(
-                ws.roomId
-              );
-
-            if (!room) {
-
-              return;
-
-            }
-
-            broadcast(
-              room,
-              ws,
-              {
-                type:
-                  "answer",
-
-                answer:
-                  message.answer
-              }
-            );
-
-            return;
-
-          }
-
-
-          /*
-          ========================================
-          ICE
-          ========================================
-          */
-
-          if (
-            type ===
-            "ice"
-          ) {
-
-            const room =
-              rooms.get(
-                ws.roomId
-              );
-
-            if (!room) {
-
-              return;
-
-            }
-
-            broadcast(
-              room,
-              ws,
-              {
-                type:
-                  "ice",
-
-                candidate:
-                  message.candidate
-              }
-            );
-
-            return;
-
-          }
-
-
-          /*
-          ========================================
-          LEAVE
-          ========================================
-          */
-
-          if (
-            type ===
-            "leave"
-          ) {
-
-            removeFromRoom(
-              ws
-            );
-
-            return;
-
-          }
-
-
-          /*
-          ========================================
-          REJECT
-          ========================================
-          */
-
-          if (
-            type ===
-            "reject"
-          ) {
-
-            const room =
-              rooms.get(
-                ws.roomId
-              );
-
-            if (!room) {
-
-              return;
-
-            }
-
-            broadcast(
-              room,
-              ws,
-              {
-                type:
-                  "rejected"
-              }
-            );
-
-            return;
-
-          }
-
-        } catch (error) {
-
-          console.error(
-            "WebSocket message error:",
-            error
-          );
-
-        }
-
-      }
-    );
-
-
-    ws.on(
-      "close",
-      () => {
-
-        removeFromRoom(
-          ws
         );
 
-      }
-    );
-
-
-    ws.on(
-      "error",
-      error => {
+      } catch (error) {
 
         console.error(
-          "WebSocket error:",
+          "Server error:",
           error
         );
 
-      }
-    );
 
-  }
-);
+        sendJSON(
+          res,
+          500,
+          {
+            ok:
+              false,
+
+            error:
+              error.message ||
+              "Внутренняя ошибка сервера"
+          }
+        );
+
+      }
+
+    }
+  );
 
 
 /*
@@ -959,6 +787,14 @@ server.listen(
 
     console.log(
       `Video Call server listening on port ${PORT}`
+    );
+
+    console.log(
+      `LiveKit URL: ${LIVEKIT_URL}`
+    );
+
+    console.log(
+      `LiveKit configured: ${livekitConfigured()}`
     );
 
   }
