@@ -1,10 +1,4 @@
 {
   "version": 2,
-  "rewrites": [
-    {
-      "source": "/api/livekit/token",
-      "destination": "/api/livekit/token.js"
-    }
-  ]
+  "cleanUrls": true
 }
-
