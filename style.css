@@ -6,10 +6,13 @@ html,
 body {
   margin: 0;
   padding: 0;
+
   width: 100%;
   min-height: 100%;
+
   background: #0b0b0f;
   color: white;
+
   font-family:
     -apple-system,
     BlinkMacSystemFont,
@@ -45,24 +48,283 @@ button {
 }
 
 
-/* =========================
+/* ==================================================
+   INTRO
+================================================== */
+
+#introScreen {
+  position: fixed;
+
+  inset: 0;
+
+  z-index: 9999;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  background: #e8dcc8;
+
+  overflow: hidden;
+
+  animation:
+    introFadeOut
+    .8s ease
+    4.5s
+    forwards;
+}
+
+.intro-content {
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  transform: translateY(-10px);
+}
+
+
+/* LOGO */
+
+.intro-logo {
+  width: 145px;
+  height: 145px;
+
+  object-fit: contain;
+
+  opacity: 0;
+
+  transform:
+    scale(.72)
+    translateY(20px);
+
+  animation:
+    introLogoIn
+    1s
+    cubic-bezier(.2,.8,.2,1)
+    .25s
+    forwards;
+}
+
+
+/* NAMES */
+
+.intro-names {
+  margin-top: 26px;
+
+  display: flex;
+
+  flex-direction: column;
+
+  align-items: center;
+
+  gap: 8px;
+}
+
+.intro-name {
+  position: relative;
+
+  overflow: hidden;
+
+  color: #171513;
+
+  font-size: 22px;
+
+  font-weight: 800;
+
+  letter-spacing: 5px;
+
+  line-height: 1.35;
+
+  opacity: 0;
+
+  transform:
+    translateY(12px);
+
+  animation:
+    introNameIn
+    .65s
+    ease
+    forwards;
+}
+
+
+/*
+==================================================
+ШТОРКА
+==================================================
+*/
+
+.intro-name::after {
+  content: "";
+
+  position: absolute;
+
+  top: 0;
+  right: 0;
+  bottom: 0;
+
+  width: 100%;
+
+  background: #e8dcc8;
+
+  transform:
+    translateX(0);
+
+  animation:
+    introCurtain
+    .8s
+    cubic-bezier(.77,0,.18,1)
+    forwards;
+}
+
+
+/*
+==================================================
+ПОСЛЕДОВАТЕЛЬНОСТЬ
+==================================================
+*/
+
+.intro-name:nth-child(1) {
+  animation-delay: 1.15s;
+}
+
+.intro-name:nth-child(1)::after {
+  animation-delay: 1.15s;
+}
+
+.intro-name:nth-child(2) {
+  animation-delay: 1.65s;
+}
+
+.intro-name:nth-child(2)::after {
+  animation-delay: 1.65s;
+}
+
+.intro-name:nth-child(3) {
+  animation-delay: 2.15s;
+}
+
+.intro-name:nth-child(3)::after {
+  animation-delay: 2.15s;
+}
+
+
+/*
+==================================================
+INTRO ANIMATIONS
+==================================================
+*/
+
+@keyframes introLogoIn {
+
+  0% {
+    opacity: 0;
+
+    transform:
+      scale(.72)
+      translateY(20px);
+  }
+
+  60% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 1;
+
+    transform:
+      scale(1)
+      translateY(0);
+  }
+
+}
+
+
+@keyframes introNameIn {
+
+  0% {
+    opacity: 0;
+
+    transform:
+      translateY(12px);
+  }
+
+  100% {
+    opacity: 1;
+
+    transform:
+      translateY(0);
+  }
+
+}
+
+
+@keyframes introCurtain {
+
+  0% {
+    transform:
+      translateX(0);
+  }
+
+  100% {
+    transform:
+      translateX(101%);
+  }
+
+}
+
+
+@keyframes introFadeOut {
+
+  0% {
+    opacity: 1;
+
+    visibility: visible;
+  }
+
+  85% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+
+    visibility: hidden;
+
+    pointer-events: none;
+  }
+
+}
+
+
+/* ==================================================
    START SCREEN
-========================= */
+================================================== */
 
 #startScreen {
   display: flex;
+
   flex-direction: column;
+
   align-items: center;
   justify-content: center;
 
   padding: 24px;
 }
 
+
+/* LOGO */
+
 .logo {
   width: 82px;
   height: 82px;
 
   display: flex;
+
   align-items: center;
   justify-content: center;
 
@@ -77,10 +339,14 @@ button {
     rgba(0, 0, 0, .45);
 }
 
+
+/* TITLE */
+
 h1 {
   margin: 22px 0 8px;
 
   font-size: 38px;
+
   font-weight: 900;
 }
 
@@ -91,6 +357,9 @@ h1 {
 
   text-align: center;
 }
+
+
+/* CARD */
 
 .card {
   width: 100%;
@@ -108,6 +377,9 @@ h1 {
     0 20px 60px
     rgba(0, 0, 0, .35);
 }
+
+
+/* BUTTONS */
 
 .primary-button,
 .secondary-button {
@@ -146,9 +418,14 @@ h1 {
   opacity: .9;
 }
 
+
+/* DIVIDER */
+
 .divider {
   display: flex;
+
   align-items: center;
+
   gap: 12px;
 
   margin: 20px 0;
@@ -168,6 +445,9 @@ h1 {
 
   background: #2b2b34;
 }
+
+
+/* INPUT */
 
 input {
   width: 100%;
@@ -197,6 +477,9 @@ input:focus {
   margin-top: 10px;
 }
 
+
+/* STATUS */
+
 .status {
   min-height: 24px;
 
@@ -210,9 +493,9 @@ input:focus {
 }
 
 
-/* =========================
+/* ==================================================
    CALL SCREEN
-========================= */
+================================================== */
 
 #callScreen {
   position: relative;
@@ -235,6 +518,9 @@ input:focus {
   background: #050507;
 }
 
+
+/* REMOTE */
+
 #remoteVideo {
   position: absolute;
 
@@ -248,6 +534,9 @@ input:focus {
   background: #09090d;
 }
 
+
+/* PLACEHOLDER */
+
 .video-placeholder {
   position: absolute;
 
@@ -258,7 +547,6 @@ input:focus {
   flex-direction: column;
 
   align-items: center;
-
   justify-content: center;
 
   gap: 15px;
@@ -291,6 +579,9 @@ input:focus {
   font-size: 35px;
 }
 
+
+/* LOCAL VIDEO */
+
 .local-video-container {
   position: absolute;
 
@@ -306,7 +597,8 @@ input:focus {
 
   background: #17171d;
 
-  border: 2px solid rgba(255,255,255,.18);
+  border: 2px solid
+    rgba(255,255,255,.18);
 
   box-shadow:
     0 15px 40px
@@ -340,9 +632,9 @@ input:focus {
 }
 
 
-/* =========================
+/* ==================================================
    TOP
-========================= */
+================================================== */
 
 .call-top {
   position: absolute;
@@ -356,6 +648,7 @@ input:focus {
   display: flex;
 
   align-items: flex-start;
+
   justify-content: space-between;
 
   padding:
@@ -385,12 +678,16 @@ input:focus {
   font-size: 12px;
 }
 
+
+/* CODE BUTTON */
+
 .small-button {
   padding: 10px 13px;
 
   border-radius: 12px;
 
-  background: rgba(20,20,27,.8);
+  background:
+    rgba(20,20,27,.8);
 
   color: white;
 
@@ -402,9 +699,9 @@ input:focus {
 }
 
 
-/* =========================
+/* ==================================================
    CONTROLS
-========================= */
+================================================== */
 
 .controls {
   position: absolute;
@@ -446,7 +743,8 @@ input:focus {
 
   border-radius: 50%;
 
-  background: rgba(35,35,43,.92);
+  background:
+    rgba(35,35,43,.92);
 
   color: white;
 
@@ -466,7 +764,8 @@ input:focus {
 .control-button.hangup {
   background: #d83b3b;
 
-  transform: rotate(135deg);
+  transform:
+    rotate(135deg);
 }
 
 .control-button.hangup:active {
@@ -476,9 +775,9 @@ input:focus {
 }
 
 
-/* =========================
-   ID PANEL
-========================= */
+/* ==================================================
+   ROOM CODE PANEL
+================================================== */
 
 .my-id-panel {
   position: absolute;
@@ -487,39 +786,60 @@ input:focus {
 
   bottom: 88px;
 
-  transform: translateX(-50%);
+  transform:
+    translateX(-50%);
 
   z-index: 20;
 
-  width: auto;
+  width:
+    calc(100% - 40px);
 
-  max-width: 280px;
+  max-width: 480px;
 
-  padding: 7px 9px;
+  padding: 8px 10px;
 
-  border-radius: 11px;
+  border-radius: 12px;
 
-  background: rgba(15,15,20,.30);
+  background:
+    rgba(15,15,20,.30);
 
-  border: 1px solid rgba(255,255,255,.08);
+  border:
+    1px solid
+    rgba(255,255,255,.07);
 
-  backdrop-filter: blur(10px);
-
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter:
+    blur(10px);
 
   transition:
-    opacity .2s ease,
-    transform .2s ease;
+    opacity .35s ease,
+    transform .35s ease,
+    visibility .35s ease;
+}
+
+
+/*
+Когда собеседник подключился —
+панель исчезает.
+*/
+
+.my-id-panel.connected {
+  opacity: 0;
+
+  visibility: hidden;
+
+  pointer-events: none;
+
+  transform:
+    translateX(-50%)
+    translateY(12px);
 }
 
 .my-id-label {
-  color: rgba(255,255,255,.65);
+  color: #8d8d98;
 
-  font-size: 9px;
+  font-size: 10px;
 
-  margin-bottom: 3px;
-
-  text-align: center;
+  margin-bottom: 4px;
 }
 
 .my-id-row {
@@ -527,13 +847,11 @@ input:focus {
 
   align-items: center;
 
-  justify-content: center;
-
-  gap: 6px;
+  gap: 7px;
 }
 
 .my-id-row code {
-  flex: 0 1 auto;
+  flex: 1;
 
   min-width: 0;
 
@@ -545,48 +863,30 @@ input:focus {
 
   color: white;
 
-  font-size: 11px;
-
-  font-weight: 700;
-
-  letter-spacing: .5px;
+  font-size: 12px;
 }
 
 .copy-button {
   flex-shrink: 0;
 
-  padding: 5px 7px;
+  padding: 6px 8px;
 
-  border-radius: 7px;
+  border-radius: 8px;
 
-  background: rgba(41,41,50,.65);
+  background:
+    rgba(41,41,50,.55);
 
   color: white;
 
-  font-size: 10px;
+  font-size: 11px;
 
   font-weight: 700;
 }
 
 
-/* =========================
-   HIDE ID PANEL
-========================= */
-
-.my-id-panel.connected {
-  opacity: 0;
-
-  pointer-events: none;
-
-  transform:
-    translateX(-50%)
-    translateY(8px);
-}
-
-
-/* =========================
+/* ==================================================
    INCOMING CALL
-========================= */
+================================================== */
 
 .incoming {
   position: fixed;
@@ -605,7 +905,8 @@ input:focus {
   background:
     rgba(0,0,0,.72);
 
-  backdrop-filter: blur(10px);
+  backdrop-filter:
+    blur(10px);
 }
 
 .incoming-card {
@@ -660,7 +961,8 @@ input:focus {
 .incoming-buttons {
   display: grid;
 
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns:
+    1fr 1fr;
 
   gap: 10px;
 }
@@ -687,9 +989,9 @@ input:focus {
 }
 
 
-/* =========================
+/* ==================================================
    TOAST
-========================= */
+================================================== */
 
 .toast {
   position: fixed;
@@ -699,7 +1001,8 @@ input:focus {
 
   z-index: 200;
 
-  transform: translateX(-50%);
+  transform:
+    translateX(-50%);
 
   padding: 12px 18px;
 
@@ -717,11 +1020,28 @@ input:focus {
 }
 
 
-/* =========================
+/* ==================================================
    MOBILE
-========================= */
+================================================== */
 
 @media (max-width: 600px) {
+
+  .intro-logo {
+    width: 125px;
+    height: 125px;
+  }
+
+  .intro-names {
+    margin-top: 22px;
+
+    gap: 7px;
+  }
+
+  .intro-name {
+    font-size: 19px;
+
+    letter-spacing: 4px;
+  }
 
   h1 {
     font-size: 32px;
@@ -756,12 +1076,16 @@ input:focus {
   .my-id-panel {
     bottom: 85px;
 
-    max-width: 240px;
-
-    padding: 6px 8px;
+    width:
+      calc(100% - 24px);
   }
 
 }
+
+
+/* ==================================================
+   SHORT SCREEN
+================================================== */
 
 @media (max-height: 700px) {
 
