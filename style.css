@@ -491,27 +491,35 @@ input:focus {
 
   z-index: 20;
 
-  width: calc(100% - 40px);
+  width: auto;
 
-  max-width: 480px;
+  max-width: 280px;
 
-  padding: 12px 14px;
+  padding: 7px 9px;
 
-  border-radius: 15px;
+  border-radius: 11px;
 
-  background: rgba(15,15,20,.85);
+  background: rgba(15,15,20,.30);
 
-  border: 1px solid rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.08);
 
-  backdrop-filter: blur(15px);
+  backdrop-filter: blur(10px);
+
+  -webkit-backdrop-filter: blur(10px);
+
+  transition:
+    opacity .2s ease,
+    transform .2s ease;
 }
 
 .my-id-label {
-  color: #8d8d98;
+  color: rgba(255,255,255,.65);
 
-  font-size: 11px;
+  font-size: 9px;
 
-  margin-bottom: 6px;
+  margin-bottom: 3px;
+
+  text-align: center;
 }
 
 .my-id-row {
@@ -519,11 +527,13 @@ input:focus {
 
   align-items: center;
 
-  gap: 10px;
+  justify-content: center;
+
+  gap: 6px;
 }
 
 .my-id-row code {
-  flex: 1;
+  flex: 0 1 auto;
 
   min-width: 0;
 
@@ -535,23 +545,42 @@ input:focus {
 
   color: white;
 
-  font-size: 13px;
+  font-size: 11px;
+
+  font-weight: 700;
+
+  letter-spacing: .5px;
 }
 
 .copy-button {
   flex-shrink: 0;
 
-  padding: 8px 10px;
+  padding: 5px 7px;
 
-  border-radius: 9px;
+  border-radius: 7px;
 
-  background: #292932;
+  background: rgba(41,41,50,.65);
 
   color: white;
 
-  font-size: 12px;
+  font-size: 10px;
 
   font-weight: 700;
+}
+
+
+/* =========================
+   HIDE ID PANEL
+========================= */
+
+.my-id-panel.connected {
+  opacity: 0;
+
+  pointer-events: none;
+
+  transform:
+    translateX(-50%)
+    translateY(8px);
 }
 
 
@@ -727,7 +756,9 @@ input:focus {
   .my-id-panel {
     bottom: 85px;
 
-    width: calc(100% - 24px);
+    max-width: 240px;
+
+    padding: 6px 8px;
   }
 
 }
