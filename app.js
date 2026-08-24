@@ -1,11 +1,30 @@
 "use strict";
 
+
 /*
 ==================================================
-VIDEO CALL
-ЧИСТЫЙ WEBRTC + WEBSOCKET SIGNALING
+LIVEKIT
 ==================================================
 */
+
+const LIVEKIT =
+  window.LivekitClient;
+
+if (!LIVEKIT) {
+
+  console.error(
+    "LiveKit SDK не загружен."
+  );
+
+}
+
+
+const {
+  Room,
+  RoomEvent,
+  Track
+} = LIVEKIT;
+
 
 /*
 ==================================================
@@ -14,55 +33,89 @@ DOM
 */
 
 const startScreen =
-  document.getElementById("startScreen");
+  document.getElementById(
+    "startScreen"
+  );
 
 const callScreen =
-  document.getElementById("callScreen");
+  document.getElementById(
+    "callScreen"
+  );
 
 const startButton =
-  document.getElementById("startButton");
+  document.getElementById(
+    "startButton"
+  );
 
 const joinButton =
-  document.getElementById("joinButton");
+  document.getElementById(
+    "joinButton"
+  );
 
 const remoteIdInput =
-  document.getElementById("remoteIdInput");
+  document.getElementById(
+    "remoteIdInput"
+  );
 
 const startStatus =
-  document.getElementById("startStatus");
-
-const remoteVideo =
-  document.getElementById("remoteVideo");
+  document.getElementById(
+    "startStatus"
+  );
 
 const localVideo =
-  document.getElementById("localVideo");
+  document.getElementById(
+    "localVideo"
+  );
 
-const remotePlaceholder =
-  document.getElementById("remotePlaceholder");
-
-const remotePlaceholderText =
-  document.getElementById("remotePlaceholderText");
+const remoteVideo =
+  document.getElementById(
+    "remoteVideo"
+  );
 
 const localPlaceholder =
-  document.getElementById("localPlaceholder");
+  document.getElementById(
+    "localPlaceholder"
+  );
+
+const remotePlaceholder =
+  document.getElementById(
+    "remotePlaceholder"
+  );
+
+const remotePlaceholderText =
+  document.getElementById(
+    "remotePlaceholderText"
+  );
 
 const connectionStatus =
-  document.getElementById("connectionStatus");
+  document.getElementById(
+    "connectionStatus"
+  );
 
 const myPeerId =
-  document.getElementById("myPeerId");
-
-const copyMyIdButton =
-  document.getElementById("copyMyIdButton");
+  document.getElementById(
+    "myPeerId"
+  );
 
 const copyIdButton =
-  document.getElementById("copyIdButton");
+  document.getElementById(
+    "copyIdButton"
+  );
+
+const copyMyIdButton =
+  document.getElementById(
+    "copyMyIdButton"
+  );
 
 const micButton =
-  document.getElementById("micButton");
+  document.getElementById(
+    "micButton"
+  );
 
 const cameraButton =
-  document.getElementById("cameraButton");
+  document.getElementById(
+    "cameraButton"
+  );
 
 const switchCameraButton =
   document.getElementById(
@@ -70,23 +123,14 @@ const switchCameraButton =
   );
 
 const hangupButton =
-  document.getElementById("hangupButton");
-
-const incomingCall =
-  document.getElementById("incomingCall");
-
-const acceptCallButton =
   document.getElementById(
-    "acceptCallButton"
-  );
-
-const rejectCallButton =
-  document.getElementById(
-    "rejectCallButton"
+    "hangupButton"
   );
 
 const toast =
-  document.getElementById("toast");
+  document.getElementById(
+    "toast"
+  );
 
 
 /*
@@ -95,69 +139,102 @@ STATE
 ==================================================
 */
 
-let socket = null;
+let room = null;
 
-let roomId = null;
+let roomCode = "";
 
-let isHost = false;
-
-let peerConnection = null;
-
-let localStream = null;
-
-let pendingIceCandidates = [];
-
-let pendingIncoming = false;
+let identity = "";
 
 let micEnabled = true;
 
 let cameraEnabled = true;
 
-let currentCamera = "user";
+let facingMode = "user";
 
-let reconnectTimer = null;
+let remoteAudioElements = [];
 
 
 /*
 ==================================================
-TURN / STUN
-==================================================
-
-Важное:
-TURN credentials берём с signaling server
-через /turn.
-
-Постоянные Metered credentials
-не храним здесь.
+ROOM CODE
 ==================================================
 */
 
-let iceServers = [
-  {
-    urls: [
-      "stun:stun.relay.metered.ca:80"
-    ]
+function generateRoomCode() {
+
+  const alphabet =
+    "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  let result = "";
+
+  for (
+    let i = 0;
+    i < 6;
+    i++
+  ) {
+
+    result +=
+      alphabet[
+        Math.floor(
+          Math.random() *
+          alphabet.length
+        )
+      ];
+
   }
-];
+
+  return result;
+
+}
 
 
 /*
 ==================================================
-WEBSOCKET URL
+IDENTITY
 ==================================================
 */
 
-function getWebSocketUrl() {
+function createIdentity() {
 
-  const protocol =
-    location.protocol === "https:"
-      ? "wss:"
-      : "ws:";
+  if (
+    window.crypto &&
+    typeof window.crypto.randomUUID ===
+      "function"
+  ) {
+
+    return (
+      "user-" +
+      window.crypto.randomUUID()
+    );
+
+  }
 
   return (
-    protocol +
-    "//" +
-    location.host
+    "user-" +
+    Date.now() +
+    "-" +
+    Math.random()
+      .toString(36)
+      .slice(2)
+  );
+
+}
+
+
+/*
+==================================================
+ROOM NAME
+==================================================
+*/
+
+function getRoomName(
+  code
+) {
+
+  return (
+    "vc-" +
+    String(code)
+      .toUpperCase()
   );
 
 }
@@ -169,18 +246,40 @@ STATUS
 ==================================================
 */
 
-function setStartStatus(text) {
+function setConnectionStatus(
+  text
+) {
 
-  startStatus.textContent =
-    text || "";
+  if (
+    connectionStatus
+  ) {
+
+    connectionStatus.textContent =
+      text;
+
+  }
 
 }
 
 
-function setConnectionStatus(text) {
+/*
+==================================================
+START STATUS
+==================================================
+*/
 
-  connectionStatus.textContent =
-    text || "";
+function setStartStatus(
+  text
+) {
+
+  if (
+    startStatus
+  ) {
+
+    startStatus.textContent =
+      text;
+
+  }
 
 }
 
@@ -191,9 +290,15 @@ TOAST
 ==================================================
 */
 
-let toastTimer = null;
+function showToast(
+  message
+) {
 
-function showToast(message) {
+  if (!toast) {
+
+    return;
+
+  }
 
   toast.textContent =
     message;
@@ -202,11 +307,13 @@ function showToast(message) {
     "hidden"
   );
 
+
   clearTimeout(
-    toastTimer
+    showToast.timer
   );
 
-  toastTimer =
+
+  showToast.timer =
     setTimeout(
       () => {
 
@@ -223,1634 +330,46 @@ function showToast(message) {
 
 /*
 ==================================================
-SHOW SCREENS
+SHOW START
 ==================================================
 */
 
 function showStartScreen() {
 
-  startScreen.classList.remove(
-    "hidden"
-  );
-
-  callScreen.classList.add(
-    "hidden"
-  );
-
-}
-
-
-function showCallScreen() {
-
-  startScreen.classList.add(
-    "hidden"
-  );
-
-  callScreen.classList.remove(
-    "hidden"
-  );
-
-}
-
-
-/*
-==================================================
-GENERATE ROOM
-==================================================
-*/
-
-function generateRoomId() {
-
-  const chars =
-    "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
-  let result = "";
-
-  for (
-    let i = 0;
-    i < 6;
-    i++
-  ) {
-
-    result +=
-      chars[
-        Math.floor(
-          Math.random() *
-          chars.length
-        )
-      ];
-
-  }
-
-  return result;
-
-}
-
-
-/*
-==================================================
-NORMALIZE ROOM
-==================================================
-*/
-
-function normalizeRoomId(value) {
-
-  return String(
-    value || ""
-  )
-    .toUpperCase()
-    .replace(
-      /[^A-Z0-9]/g,
-      ""
-    )
-    .slice(0, 6);
-
-}
-
-
-/*
-==================================================
-LOAD TURN
-==================================================
-*/
-
-async function loadTurnServers() {
-
-  try {
-
-    const response =
-      await fetch(
-        "/turn",
-        {
-          cache: "no-store"
-        }
-      );
-
-    if (!response.ok) {
-
-      throw new Error(
-        "TURN server unavailable"
-      );
-
-    }
-
-    const data =
-      await response.json();
-
-    if (
-      Array.isArray(
-        data.iceServers
-      ) &&
-      data.iceServers.length
-    ) {
-
-      iceServers =
-        data.iceServers;
-
-    }
-
-  } catch (error) {
-
-    console.warn(
-      "TURN не загружен:",
-      error
-    );
-
-    /*
-    STUN всё равно оставляем.
-    */
-
-  }
-
-}
-
-
-/*
-==================================================
-MEDIA
-==================================================
-*/
-
-async function getLocalMedia() {
-
-  if (localStream) {
-
-    return localStream;
-
-  }
-
-  setConnectionStatus(
-    "Запрашиваем камеру и микрофон..."
-  );
-
-  localStream =
-    await navigator.mediaDevices.getUserMedia(
-      {
-        audio: true,
-
-        video: {
-          facingMode:
-            currentCamera
-        }
-      }
-    );
-
-  localVideo.srcObject =
-    localStream;
-
-  localVideo.play().catch(
-    () => {}
-  );
-
-  updateLocalVideoState();
-
-  return localStream;
-
-}
-
-
-/*
-==================================================
-CREATE PEER CONNECTION
-==================================================
-*/
-
-function createPeerConnection() {
-
-  if (peerConnection) {
-
-    try {
-
-      peerConnection.close();
-
-    } catch {}
-
-  }
-
-  pendingIceCandidates = [];
-
-  peerConnection =
-    new RTCPeerConnection(
-      {
-        iceServers,
-
-        iceCandidatePoolSize: 10
-      }
-    );
-
-
-  /*
-  -----------------------------------------------
-  LOCAL TRACKS
-  -----------------------------------------------
-  */
-
-  if (localStream) {
-
-    localStream
-      .getTracks()
-      .forEach(
-        track => {
-
-          peerConnection.addTrack(
-            track,
-            localStream
-          );
-
-        }
-      );
-
-  }
-
-
-  /*
-  -----------------------------------------------
-  REMOTE TRACK
-  -----------------------------------------------
-  */
-
-  peerConnection.ontrack =
-    event => {
-
-      const stream =
-        event.streams &&
-        event.streams[0];
-
-      if (!stream) {
-
-        return;
-
-      }
-
-      remoteVideo.srcObject =
-        stream;
-
-      remotePlaceholder.classList.add(
-        "hidden"
-      );
-
-      remoteVideo.play().catch(
-        () => {}
-      );
-
-      setConnectionStatus(
-        "Собеседник подключён"
-      );
-
-    };
-
-
-  /*
-  -----------------------------------------------
-  ICE
-  -----------------------------------------------
-  */
-
-  peerConnection.onicecandidate =
-    event => {
-
-      if (
-        event.candidate &&
-        socket &&
-        socket.readyState ===
-          WebSocket.OPEN
-      ) {
-
-        sendSignal(
-          {
-            type: "ice",
-
-            candidate:
-              event.candidate
-          }
-        );
-
-      }
-
-    };
-
-
-  /*
-  -----------------------------------------------
-  CONNECTION
-  -----------------------------------------------
-  */
-
-  peerConnection.onconnectionstatechange =
-    () => {
-
-      if (!peerConnection) {
-
-        return;
-
-      }
-
-      const state =
-        peerConnection.connectionState;
-
-      console.log(
-        "WebRTC:",
-        state
-      );
-
-      if (
-        state === "connected"
-      ) {
-
-        setConnectionStatus(
-          "Соединение установлено"
-        );
-
-        remotePlaceholder.classList.add(
-          "hidden"
-        );
-
-      }
-
-      else if (
-        state === "connecting"
-      ) {
-
-        setConnectionStatus(
-          "Соединение..."
-        );
-
-      }
-
-      else if (
-        state === "disconnected"
-      ) {
-
-        setConnectionStatus(
-          "Соединение потеряно..."
-        );
-
-      }
-
-      else if (
-        state === "failed"
-      ) {
-
-        setConnectionStatus(
-          "Не удалось установить соединение"
-        );
-
-        showToast(
-          "WebRTC-соединение не установлено."
-        );
-
-      }
-
-      else if (
-        state === "closed"
-      ) {
-
-        setConnectionStatus(
-          "Звонок завершён"
-        );
-
-      }
-
-    };
-
-
-  /*
-  -----------------------------------------------
-  ICE CONNECTION
-  -----------------------------------------------
-  */
-
-  peerConnection.oniceconnectionstatechange =
-    () => {
-
-      console.log(
-        "ICE:",
-        peerConnection.iceConnectionState
-      );
-
-    };
-
-
-  /*
-  -----------------------------------------------
-  SIGNALING STATE
-  -----------------------------------------------
-  */
-
-  peerConnection.onsignalingstatechange =
-    () => {
-
-      console.log(
-        "Signaling:",
-        peerConnection.signalingState
-      );
-
-    };
-
-
-  return peerConnection;
-
-}
-
-
-/*
-==================================================
-CONNECT SIGNALING
-==================================================
-*/
-
-function connectSocket() {
-
-  return new Promise(
-    (resolve, reject) => {
-
-      if (
-        socket &&
-        socket.readyState ===
-          WebSocket.OPEN
-      ) {
-
-        resolve();
-
-        return;
-
-      }
-
-      const ws =
-        new WebSocket(
-          getWebSocketUrl()
-        );
-
-      socket = ws;
-
-
-      let opened = false;
-
-
-      ws.onopen =
-        () => {
-
-          opened = true;
-
-          console.log(
-            "Signaling connected"
-          );
-
-          resolve();
-
-        };
-
-
-      ws.onerror =
-        error => {
-
-          console.error(
-            "WebSocket error:",
-            error
-          );
-
-          if (!opened) {
-
-            reject(
-              new Error(
-                "Не удалось подключиться к signaling server"
-              )
-            );
-
-          }
-
-        };
-
-
-      ws.onclose =
-        () => {
-
-          console.log(
-            "Signaling disconnected"
-          );
-
-          if (
-            socket === ws
-          ) {
-
-            socket = null;
-
-          }
-
-          if (roomId) {
-
-            setConnectionStatus(
-              "Сигнализация отключена"
-            );
-
-          }
-
-        };
-
-
-      ws.onmessage =
-        event => {
-
-          try {
-
-            const message =
-              JSON.parse(
-                event.data
-              );
-
-            handleSignal(
-              message
-            );
-
-          } catch (error) {
-
-            console.error(
-              "Bad signaling message:",
-              error
-            );
-
-          }
-
-        };
-
-    }
-  );
-
-}
-
-
-/*
-==================================================
-SEND SIGNAL
-==================================================
-*/
-
-function sendSignal(payload) {
-
-  if (
-    !socket ||
-    socket.readyState !==
-      WebSocket.OPEN
-  ) {
-
-    console.warn(
-      "Socket is not connected"
-    );
-
-    return;
-
-  }
-
-  socket.send(
-    JSON.stringify(
-      {
-        roomId,
-
-        ...payload
-      }
-    )
-  );
-
-}
-
-
-/*
-==================================================
-CREATE ROOM
-==================================================
-*/
-
-async function createRoom() {
-
-  try {
-
-    startButton.disabled =
-      true;
-
-    joinButton.disabled =
-      true;
-
-    setStartStatus(
-      "Подключение..."
-    );
-
-
-    await loadTurnServers();
-
-    await getLocalMedia();
-
-    roomId =
-      generateRoomId();
-
-    isHost = true;
-
-    await connectSocket();
-
-
-    sendSignal(
-      {
-        type: "create"
-      }
-    );
-
-
-    showCallScreen();
-
-    myPeerId.textContent =
-      roomId;
-
-    setConnectionStatus(
-      "Комната создана. Ожидание собеседника..."
-    );
-
-    remotePlaceholderText.textContent =
-      "Ожидание собеседника...";
-
-
-    showToast(
-      "Код звонка создан"
-    );
-
-  } catch (error) {
-
-    console.error(
-      error
-    );
-
-    cleanupCall();
-
-    setStartStatus(
-      getErrorMessage(error)
-    );
-
-  } finally {
-
-    startButton.disabled =
-      false;
-
-    joinButton.disabled =
-      false;
-
-  }
-
-}
-
-
-/*
-==================================================
-JOIN ROOM
-==================================================
-*/
-
-async function joinRoom() {
-
-  const id =
-    normalizeRoomId(
-      remoteIdInput.value
-    );
-
-  if (
-    id.length !== 6
-  ) {
-
-    setStartStatus(
-      "Введите правильный 6-значный код."
-    );
-
-    return;
-
-  }
-
-  try {
-
-    startButton.disabled =
-      true;
-
-    joinButton.disabled =
-      true;
-
-    setStartStatus(
-      "Подключение..."
-    );
-
-
-    await loadTurnServers();
-
-    await getLocalMedia();
-
-    roomId =
-      id;
-
-    isHost = false;
-
-    await connectSocket();
-
-
-    sendSignal(
-      {
-        type: "join"
-      }
-    );
-
-
-    showCallScreen();
-
-    myPeerId.textContent =
-      roomId;
-
-    setConnectionStatus(
-      "Подключение к собеседнику..."
-    );
-
-    remotePlaceholderText.textContent =
-      "Подключение...";
-
-  } catch (error) {
-
-    console.error(
-      error
-    );
-
-    cleanupCall();
-
-    setStartStatus(
-      getErrorMessage(error)
-    );
-
-  } finally {
-
-    startButton.disabled =
-      false;
-
-    joinButton.disabled =
-      false;
-
-  }
-
-}
-
-
-/*
-==================================================
-SIGNAL HANDLER
-==================================================
-*/
-
-async function handleSignal(message) {
-
-  console.log(
-    "SIGNAL:",
-    message.type
-  );
-
-
-  if (
-    message.type ===
-    "created"
-  ) {
-
-    setConnectionStatus(
-      "Комната создана. Ожидание собеседника..."
-    );
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "joined"
-  ) {
-
-    if (!isHost) {
-
-      setConnectionStatus(
-        "Собеседник найден..."
-      );
-
-    }
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "peer-joined"
-  ) {
-
-    if (!isHost) {
-
-      return;
-
-    }
-
-    setConnectionStatus(
-      "Собеседник найден. Создание соединения..."
-    );
-
-    await startOffer();
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "offer"
-  ) {
-
-    await handleOffer(
-      message.offer
-    );
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "answer"
-  ) {
-
-    await handleAnswer(
-      message.answer
-    );
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "ice"
-  ) {
-
-    await handleRemoteIce(
-      message.candidate
-    );
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "peer-left"
-  ) {
-
-    setConnectionStatus(
-      "Собеседник отключился"
-    );
-
-    remotePlaceholder.classList.remove(
+  startScreen
+    ?.classList
+    .remove(
       "hidden"
     );
 
-    remotePlaceholderText.textContent =
-      "Собеседник отключился";
-
-    remoteVideo.srcObject =
-      null;
-
-    if (peerConnection) {
-
-      try {
-
-        peerConnection.close();
-
-      } catch {}
-
-      peerConnection =
-        null;
-
-    }
-
-    showToast(
-      "Собеседник завершил звонок."
+  callScreen
+    ?.classList
+    .add(
+      "hidden"
     );
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "room-full"
-  ) {
-
-    showToast(
-      "Эта комната уже занята."
-    );
-
-    cleanupCall();
-
-    setStartStatus(
-      "Комната уже занята."
-    );
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "room-not-found"
-  ) {
-
-    showToast(
-      "Комната не найдена."
-    );
-
-    cleanupCall();
-
-    setStartStatus(
-      "Комната не найдена."
-    );
-
-    return;
-
-  }
-
-
-  if (
-    message.type ===
-    "rejected"
-  ) {
-
-    showToast(
-      "Звонок отклонён."
-    );
-
-    cleanupCall();
-
-    return;
-
-  }
 
 }
 
 
 /*
 ==================================================
-START OFFER
+SHOW CALL
 ==================================================
 */
 
-async function startOffer() {
+function showCallScreen() {
 
-  if (!peerConnection) {
-
-    createPeerConnection();
-
-  }
-
-  const offer =
-    await peerConnection.createOffer(
-      {
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true
-      }
+  startScreen
+    ?.classList
+    .add(
+      "hidden"
     );
 
-  await peerConnection.setLocalDescription(
-    offer
-  );
-
-  sendSignal(
-    {
-      type: "offer",
-
-      offer:
-        peerConnection.localDescription
-    }
-  );
-
-}
-
-
-/*
-==================================================
-HANDLE OFFER
-==================================================
-*/
-
-async function handleOffer(
-  offer
-) {
-
-  if (!peerConnection) {
-
-    createPeerConnection();
-
-  }
-
-  await peerConnection.setRemoteDescription(
-    new RTCSessionDescription(
-      offer
-    )
-  );
-
-  await flushPendingIce();
-
-  const answer =
-    await peerConnection.createAnswer();
-
-  await peerConnection.setLocalDescription(
-    answer
-  );
-
-  sendSignal(
-    {
-      type: "answer",
-
-      answer:
-        peerConnection.localDescription
-    }
-  );
-
-}
-
-
-/*
-==================================================
-HANDLE ANSWER
-==================================================
-*/
-
-async function handleAnswer(
-  answer
-) {
-
-  if (!peerConnection) {
-
-    return;
-
-  }
-
-  await peerConnection.setRemoteDescription(
-    new RTCSessionDescription(
-      answer
-    )
-  );
-
-  await flushPendingIce();
-
-}
-
-
-/*
-==================================================
-HANDLE ICE
-==================================================
-*/
-
-async function handleRemoteIce(
-  candidate
-) {
-
-  if (!candidate) {
-
-    return;
-
-  }
-
-  if (
-    !peerConnection ||
-    !peerConnection.remoteDescription
-  ) {
-
-    pendingIceCandidates.push(
-      candidate
+  callScreen
+    ?.classList
+    .remove(
+      "hidden"
     );
-
-    return;
-
-  }
-
-  try {
-
-    await peerConnection.addIceCandidate(
-      new RTCIceCandidate(
-        candidate
-      )
-    );
-
-  } catch (error) {
-
-    console.warn(
-      "ICE candidate error:",
-      error
-    );
-
-  }
-
-}
-
-
-/*
-==================================================
-FLUSH ICE
-==================================================
-*/
-
-async function flushPendingIce() {
-
-  if (!peerConnection) {
-
-    return;
-
-  }
-
-  if (
-    !peerConnection.remoteDescription
-  ) {
-
-    return;
-
-  }
-
-  const candidates =
-    pendingIceCandidates;
-
-  pendingIceCandidates = [];
-
-
-  for (
-    const candidate of candidates
-  ) {
-
-    try {
-
-      await peerConnection.addIceCandidate(
-        new RTCIceCandidate(
-          candidate
-        )
-      );
-
-    } catch (error) {
-
-      console.warn(
-        "ICE flush error:",
-        error
-      );
-
-    }
-
-  }
-
-}
-
-
-/*
-==================================================
-MIC
-==================================================
-*/
-
-function toggleMicrophone() {
-
-  if (!localStream) {
-
-    return;
-
-  }
-
-  const tracks =
-    localStream.getAudioTracks();
-
-  if (!tracks.length) {
-
-    return;
-
-  }
-
-  micEnabled =
-    !micEnabled;
-
-  tracks.forEach(
-    track => {
-
-      track.enabled =
-        micEnabled;
-
-    }
-  );
-
-  micButton.classList.toggle(
-    "off",
-    !micEnabled
-  );
-
-  micButton.textContent =
-    micEnabled
-      ? "🎙️"
-      : "🔇";
-
-  showToast(
-    micEnabled
-      ? "Микрофон включён"
-      : "Микрофон выключен"
-  );
-
-}
-
-
-/*
-==================================================
-CAMERA
-==================================================
-*/
-
-function toggleCamera() {
-
-  if (!localStream) {
-
-    return;
-
-  }
-
-  const tracks =
-    localStream.getVideoTracks();
-
-  if (!tracks.length) {
-
-    return;
-
-  }
-
-  cameraEnabled =
-    !cameraEnabled;
-
-  tracks.forEach(
-    track => {
-
-      track.enabled =
-        cameraEnabled;
-
-    }
-  );
-
-  cameraButton.classList.toggle(
-    "off",
-    !cameraEnabled
-  );
-
-  cameraButton.textContent =
-    cameraEnabled
-      ? "📷"
-      : "🚫";
-
-  localPlaceholder.classList.toggle(
-    "hidden",
-    cameraEnabled
-  );
-
-  showToast(
-    cameraEnabled
-      ? "Камера включена"
-      : "Камера выключена"
-  );
-
-}
-
-
-/*
-==================================================
-SWITCH CAMERA
-==================================================
-*/
-
-async function switchCamera() {
-
-  if (!localStream) {
-
-    return;
-
-  }
-
-  if (
-    !navigator.mediaDevices ||
-    !navigator.mediaDevices.getUserMedia
-  ) {
-
-    return;
-
-  }
-
-
-  const oldTrack =
-    localStream.getVideoTracks()[0];
-
-  if (!oldTrack) {
-
-    return;
-
-  }
-
-
-  currentCamera =
-    currentCamera === "user"
-      ? "environment"
-      : "user";
-
-
-  try {
-
-    const newStream =
-      await navigator.mediaDevices.getUserMedia(
-        {
-          audio: false,
-
-          video: {
-            facingMode:
-              {
-                ideal:
-                  currentCamera
-              }
-          }
-        }
-      );
-
-
-    const newTrack =
-      newStream.getVideoTracks()[0];
-
-    if (!newTrack) {
-
-      throw new Error(
-        "Камера недоступна"
-      );
-
-    }
-
-
-    /*
-    Заменяем track в WebRTC.
-    */
-
-    if (peerConnection) {
-
-      const sender =
-        peerConnection
-          .getSenders()
-          .find(
-            item =>
-              item.track &&
-              item.track.kind ===
-                "video"
-          );
-
-      if (sender) {
-
-        await sender.replaceTrack(
-          newTrack
-        );
-
-      }
-
-    }
-
-
-    localStream.removeTrack(
-      oldTrack
-    );
-
-    oldTrack.stop();
-
-    localStream.addTrack(
-      newTrack
-    );
-
-    localVideo.srcObject =
-      localStream;
-
-    newTrack.enabled =
-      cameraEnabled;
-
-    localVideo.play().catch(
-      () => {}
-    );
-
-
-    /*
-    Mirror only front camera.
-    */
-
-    localVideo.style.transform =
-      currentCamera === "user"
-        ? "scaleX(-1)"
-        : "scaleX(1)";
-
-
-    showToast(
-      currentCamera === "user"
-        ? "Фронтальная камера"
-        : "Основная камера"
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Camera switch error:",
-      error
-    );
-
-    currentCamera =
-      currentCamera === "user"
-        ? "environment"
-        : "user";
-
-    showToast(
-      "Не удалось переключить камеру."
-    );
-
-  }
-
-}
-
-
-/*
-==================================================
-HANGUP
-==================================================
-*/
-
-function hangup() {
-
-  /*
-  Сообщаем серверу,
-  что пользователь вышел.
-  */
-
-  if (
-    socket &&
-    socket.readyState ===
-      WebSocket.OPEN &&
-    roomId
-  ) {
-
-    try {
-
-      sendSignal(
-        {
-          type: "leave"
-        }
-      );
-
-    } catch {}
-
-  }
-
-  cleanupCall();
-
-  showToast(
-    "Звонок завершён."
-  );
-
-}
-
-
-/*
-==================================================
-CLEANUP
-==================================================
-*/
-
-function cleanupCall() {
-
-  if (peerConnection) {
-
-    try {
-
-      peerConnection.ontrack =
-        null;
-
-      peerConnection.onicecandidate =
-        null;
-
-      peerConnection.onconnectionstatechange =
-        null;
-
-      peerConnection.close();
-
-    } catch {}
-
-  }
-
-  peerConnection =
-    null;
-
-
-  if (localStream) {
-
-    localStream
-      .getTracks()
-      .forEach(
-        track => {
-
-          try {
-
-            track.stop();
-
-          } catch {}
-
-        }
-      );
-
-  }
-
-  localStream =
-    null;
-
-
-  localVideo.srcObject =
-    null;
-
-  remoteVideo.srcObject =
-    null;
-
-
-  remotePlaceholder.classList.remove(
-    "hidden"
-  );
-
-  localPlaceholder.classList.remove(
-    "hidden"
-  );
-
-
-  pendingIceCandidates = [];
-
-  roomId = null;
-
-  isHost = false;
-
-  pendingIncoming = false;
-
-  micEnabled = true;
-
-  cameraEnabled = true;
-
-  currentCamera = "user";
-
-
-  micButton.textContent =
-    "🎙️";
-
-  cameraButton.textContent =
-    "📷";
-
-
-  micButton.classList.remove(
-    "off"
-  );
-
-  cameraButton.classList.remove(
-    "off"
-  );
-
-
-  localVideo.style.transform =
-    "scaleX(-1)";
-
-
-  if (socket) {
-
-    try {
-
-      socket.close();
-
-    } catch {}
-
-  }
-
-  socket = null;
-
-
-  incomingCall.classList.add(
-    "hidden"
-  );
-
-
-  myPeerId.textContent =
-    "Создание...";
-
-
-  setConnectionStatus(
-    "Подключение..."
-  );
-
-
-  showStartScreen();
 
 }
 
@@ -1872,33 +391,39 @@ async function copyText(
     );
 
     showToast(
-      "Скопировано"
+      "Код скопирован."
     );
 
   } catch {
 
-    const input =
+    const textarea =
       document.createElement(
-        "input"
+        "textarea"
       );
 
-    input.value =
+    textarea.value =
       text;
 
+    textarea.style.position =
+      "fixed";
+
+    textarea.style.opacity =
+      "0";
+
     document.body.appendChild(
-      input
+      textarea
     );
 
-    input.select();
+    textarea.select();
 
     document.execCommand(
       "copy"
     );
 
-    input.remove();
+    textarea.remove();
 
     showToast(
-      "Скопировано"
+      "Код скопирован."
     );
 
   }
@@ -1908,56 +433,1349 @@ async function copyText(
 
 /*
 ==================================================
-ERROR MESSAGE
+GET TOKEN
 ==================================================
 */
 
-function getErrorMessage(
-  error
+async function getLiveKitToken(
+  code
 ) {
 
+  const response =
+    await fetch(
+      "/api/livekit/token",
+      {
+
+        method:
+          "POST",
+
+        headers: {
+
+          "Content-Type":
+            "application/json"
+
+        },
+
+        body:
+          JSON.stringify({
+
+            roomCode:
+              code,
+
+            identity
+
+          })
+
+      }
+    );
+
+
+  const data =
+    await response.json();
+
+
   if (
-    error &&
-    error.name ===
-      "NotAllowedError"
+    !response.ok ||
+    !data.ok
   ) {
 
-    return (
-      "Разрешите доступ к камере и микрофону."
+    throw new Error(
+      data.error ||
+      "Не удалось получить токен LiveKit."
     );
 
   }
 
-  if (
-    error &&
-    error.name ===
-      "NotFoundError"
-  ) {
 
-    return (
-      "Камера или микрофон не найдены."
+  return data;
+
+}
+
+
+/*
+==================================================
+CONNECT TO LIVEKIT
+==================================================
+*/
+
+async function connectToRoom(
+  code
+) {
+
+  if (!LIVEKIT) {
+
+    throw new Error(
+      "LiveKit SDK не загружен."
     );
 
   }
 
+
+  roomCode =
+    String(code)
+      .toUpperCase()
+      .replace(
+        /[^A-Z0-9]/g,
+        ""
+      )
+      .slice(
+        0,
+        6
+      );
+
+
   if (
-    error &&
-    error.name ===
-      "NotReadableError"
+    roomCode.length !==
+    6
   ) {
 
-    return (
-      "Камера или микрофон уже используются."
+    throw new Error(
+      "Код должен содержать 6 символов."
     );
 
   }
 
-  return (
-    error?.message ||
-    "Произошла ошибка."
+
+  if (!identity) {
+
+    identity =
+      createIdentity();
+
+  }
+
+
+  setConnectionStatus(
+    "Подключение..."
+  );
+
+
+  setStartStatus(
+    "Подключение к видеозвонку..."
+  );
+
+
+  const credentials =
+    await getLiveKitToken(
+      roomCode
+    );
+
+
+  room =
+    new Room({
+
+      adaptiveStream:
+        true,
+
+      dynacast:
+        true
+
+    });
+
+
+  /*
+  ========================================
+  EVENTS
+  ========================================
+  */
+
+  room.on(
+    RoomEvent.Connected,
+    () => {
+
+      setConnectionStatus(
+        "Вы подключены"
+      );
+
+    }
+  );
+
+
+  room.on(
+    RoomEvent.ParticipantConnected,
+    participant => {
+
+      console.log(
+        "Participant connected:",
+        participant.identity
+      );
+
+      setConnectionStatus(
+        "Собеседник подключён"
+      );
+
+      if (
+        remotePlaceholderText
+      ) {
+
+        remotePlaceholderText.textContent =
+          "Собеседник подключён";
+
+      }
+
+    }
+  );
+
+
+  room.on(
+    RoomEvent.ParticipantDisconnected,
+    participant => {
+
+      console.log(
+        "Participant disconnected:",
+        participant.identity
+      );
+
+      clearRemoteMedia();
+
+      setConnectionStatus(
+        "Собеседник отключился"
+      );
+
+      if (
+        remotePlaceholderText
+      ) {
+
+        remotePlaceholderText.textContent =
+          "Ожидание собеседника...";
+
+      }
+
+      remotePlaceholder
+        ?.classList
+        .remove(
+          "hidden"
+        );
+
+    }
+  );
+
+
+  room.on(
+    RoomEvent.TrackSubscribed,
+    (
+      track,
+      publication,
+      participant
+    ) => {
+
+      handleRemoteTrack(
+        track,
+        participant
+      );
+
+    }
+  );
+
+
+  room.on(
+    RoomEvent.TrackUnsubscribed,
+    track => {
+
+      try {
+
+        track.detach();
+
+      } catch {}
+
+      updateRemotePlaceholder();
+
+    }
+  );
+
+
+  room.on(
+    RoomEvent.Disconnected,
+    () => {
+
+      setConnectionStatus(
+        "Соединение завершено"
+      );
+
+    }
+  );
+
+
+  room.on(
+    RoomEvent.Reconnecting,
+    () => {
+
+      setConnectionStatus(
+        "Восстановление соединения..."
+      );
+
+    }
+  );
+
+
+  room.on(
+    RoomEvent.Reconnected,
+    () => {
+
+      setConnectionStatus(
+        "Соединение восстановлено"
+      );
+
+    }
+  );
+
+
+  /*
+  ========================================
+  CONNECT
+  ========================================
+  */
+
+  await room.connect(
+    credentials.serverUrl,
+    credentials.participantToken
+  );
+
+
+  console.log(
+    "Connected to LiveKit room:",
+    room.name
+  );
+
+
+  /*
+  ========================================
+  LOCAL CAMERA + MICROPHONE
+  ========================================
+  */
+
+  await room
+    .localParticipant
+    .enableCameraAndMicrophone();
+
+
+  attachLocalTracks();
+
+
+  /*
+  ========================================
+  EXISTING PARTICIPANTS
+  ========================================
+  */
+
+  for (
+    const participant of
+      room.remoteParticipants.values()
+  ) {
+
+    for (
+      const publication of
+        participant.trackPublications.values()
+    ) {
+
+      if (
+        publication.isSubscribed &&
+        publication.track
+      ) {
+
+        handleRemoteTrack(
+          publication.track,
+          participant
+        );
+
+      }
+
+    }
+
+  }
+
+
+  /*
+  ========================================
+  UI
+  ========================================
+  */
+
+  showCallScreen();
+
+  updateControls();
+
+  updateRemotePlaceholder();
+
+}
+
+
+/*
+==================================================
+LOCAL TRACKS
+==================================================
+*/
+
+function attachLocalTracks() {
+
+  if (!room) {
+
+    return;
+
+  }
+
+
+  const participant =
+    room.localParticipant;
+
+
+  /*
+  CAMERA
+  */
+
+  const cameraPublication =
+    participant.getTrackPublication(
+      Track.Source.Camera
+    );
+
+
+  if (
+    cameraPublication &&
+    cameraPublication.track
+  ) {
+
+    try {
+
+      cameraPublication.track.attach(
+        localVideo
+      );
+
+      localPlaceholder
+        ?.classList
+        .add(
+          "hidden"
+        );
+
+    } catch (error) {
+
+      console.error(
+        "Local video attach error:",
+        error
+      );
+
+    }
+
+  }
+
+
+  /*
+  MICROPHONE
+
+  Audio is sent to LiveKit,
+  therefore no local audio
+  element is required.
+  */
+
+}
+
+
+/*
+==================================================
+REMOTE TRACK
+==================================================
+*/
+
+function handleRemoteTrack(
+  track,
+  participant
+) {
+
+  console.log(
+    "Remote track:",
+    track.kind,
+    participant.identity
+  );
+
+
+  if (
+    track.kind ===
+    Track.Kind.Video
+  ) {
+
+    try {
+
+      track.attach(
+        remoteVideo
+      );
+
+      remotePlaceholder
+        ?.classList
+        .add(
+          "hidden"
+        );
+
+    } catch (error) {
+
+      console.error(
+        "Remote video attach error:",
+        error
+      );
+
+    }
+
+  }
+
+
+  if (
+    track.kind ===
+    Track.Kind.Audio
+  ) {
+
+    try {
+
+      const audio =
+        track.attach();
+
+      audio.autoplay =
+        true;
+
+      audio.playsInline =
+        true;
+
+      audio.style.display =
+        "none";
+
+      document.body.appendChild(
+        audio
+      );
+
+      remoteAudioElements.push(
+        audio
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Remote audio attach error:",
+        error
+      );
+
+    }
+
+  }
+
+
+  updateRemotePlaceholder();
+
+}
+
+
+/*
+==================================================
+REMOTE PLACEHOLDER
+==================================================
+*/
+
+function updateRemotePlaceholder() {
+
+  if (!room) {
+
+    remotePlaceholder
+      ?.classList
+      .remove(
+        "hidden"
+      );
+
+    return;
+
+  }
+
+
+  const hasRemoteParticipant =
+    room.remoteParticipants.size >
+    0;
+
+
+  const cameraPublication =
+    hasRemoteParticipant
+      ? Array.from(
+          room.remoteParticipants.values()
+        )
+          .map(
+            participant =>
+              participant.getTrackPublication(
+                Track.Source.Camera
+              )
+          )
+          .find(
+            publication =>
+              publication &&
+              publication.isSubscribed &&
+              publication.track
+          )
+      : null;
+
+
+  if (
+    cameraPublication
+  ) {
+
+    remotePlaceholder
+      ?.classList
+      .add(
+        "hidden"
+      );
+
+  } else {
+
+    remotePlaceholder
+      ?.classList
+      .remove(
+        "hidden"
+      );
+
+  }
+
+}
+
+
+/*
+==================================================
+MICROPHONE
+==================================================
+*/
+
+async function toggleMicrophone() {
+
+  if (!room) {
+
+    return;
+
+  }
+
+
+  try {
+
+    micEnabled =
+      !micEnabled;
+
+
+    await room
+      .localParticipant
+      .setMicrophoneEnabled(
+        micEnabled
+      );
+
+
+    updateControls();
+
+
+  } catch (error) {
+
+    micEnabled =
+      !micEnabled;
+
+    console.error(
+      "Microphone error:",
+      error
+    );
+
+    showToast(
+      "Не удалось изменить микрофон."
+    );
+
+  }
+
+}
+
+
+/*
+==================================================
+CAMERA
+==================================================
+*/
+
+async function toggleCamera() {
+
+  if (!room) {
+
+    return;
+
+  }
+
+
+  try {
+
+    cameraEnabled =
+      !cameraEnabled;
+
+
+    await room
+      .localParticipant
+      .setCameraEnabled(
+        cameraEnabled
+      );
+
+
+    if (
+      cameraEnabled
+    ) {
+
+      attachLocalTracks();
+
+    } else {
+
+      const publication =
+        room.localParticipant
+          .getTrackPublication(
+            Track.Source.Camera
+          );
+
+
+      if (
+        publication &&
+        publication.track
+      ) {
+
+        try {
+
+          publication.track.detach(
+            localVideo
+          );
+
+        } catch {}
+
+      }
+
+
+      localPlaceholder
+        ?.classList
+        .remove(
+          "hidden"
+        );
+
+    }
+
+
+    updateControls();
+
+
+  } catch (error) {
+
+    cameraEnabled =
+      !cameraEnabled;
+
+    console.error(
+      "Camera error:",
+      error
+    );
+
+    showToast(
+      "Не удалось изменить камеру."
+    );
+
+  }
+
+}
+
+
+/*
+==================================================
+SWITCH CAMERA
+==================================================
+*/
+
+async function switchCamera() {
+
+  if (!room) {
+
+    return;
+
+  }
+
+
+  if (!cameraEnabled) {
+
+    showToast(
+      "Сначала включите камеру."
+    );
+
+    return;
+
+  }
+
+
+  const publication =
+    room.localParticipant
+      .getTrackPublication(
+        Track.Source.Camera
+      );
+
+
+  const track =
+    publication?.track;
+
+
+  if (
+    !track
+  ) {
+
+    showToast(
+      "Камера ещё не готова."
+    );
+
+    return;
+
+  }
+
+
+  try {
+
+    facingMode =
+      facingMode ===
+      "user"
+        ? "environment"
+        : "user";
+
+
+    await track.restartTrack({
+
+      facingMode
+
+    });
+
+
+    track.attach(
+      localVideo
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "Switch camera error:",
+      error
+    );
+
+
+    /*
+    Некоторые устройства
+    не поддерживают facingMode.
+
+    В этом случае пробуем
+    переключить устройство
+    через список камер.
+    */
+
+    try {
+
+      const devices =
+        await Room.getLocalDevices(
+          "videoinput"
+        );
+
+
+      if (
+        devices.length >=
+        2
+      ) {
+
+        const currentDeviceId =
+          await track.getDeviceId();
+
+
+        const index =
+          devices.findIndex(
+            device =>
+              device.deviceId ===
+              currentDeviceId
+          );
+
+
+        const nextIndex =
+          index >= 0
+            ? (
+                index + 1
+              ) %
+              devices.length
+            : 0;
+
+
+        await room.switchActiveDevice(
+          "videoinput",
+          devices[nextIndex]
+            .deviceId
+        );
+
+
+        track.attach(
+          localVideo
+        );
+
+      } else {
+
+        throw new Error(
+          "Вторая камера не найдена."
+        );
+
+      }
+
+    } catch (
+      fallbackError
+    ) {
+
+      console.error(
+        "Fallback camera error:",
+        fallbackError
+      );
+
+      showToast(
+        "Не удалось переключить камеру."
+      );
+
+    }
+
+  }
+
+}
+
+
+/*
+==================================================
+CONTROLS
+==================================================
+*/
+
+function updateControls() {
+
+  if (micButton) {
+
+    micButton.textContent =
+      micEnabled
+        ? "🎙️"
+        : "🔇";
+
+    micButton.classList.toggle(
+      "off",
+      !micEnabled
+    );
+
+  }
+
+
+  if (cameraButton) {
+
+    cameraButton.textContent =
+      cameraEnabled
+        ? "📷"
+        : "🚫";
+
+    cameraButton.classList.toggle(
+      "off",
+      !cameraEnabled
+    );
+
+  }
+
+}
+
+
+/*
+==================================================
+CLEAR REMOTE
+==================================================
+*/
+
+function clearRemoteMedia() {
+
+  try {
+
+    if (remoteVideo) {
+
+      remoteVideo.srcObject =
+        null;
+
+    }
+
+  } catch {}
+
+
+  remoteAudioElements
+    .forEach(
+      audio => {
+
+        try {
+
+          audio.remove();
+
+        } catch {}
+
+      }
+    );
+
+
+  remoteAudioElements =
+    [];
+
+
+  if (
+    room
+  ) {
+
+    for (
+      const participant of
+        room.remoteParticipants.values()
+    ) {
+
+      for (
+        const publication of
+          participant.trackPublications.values()
+      ) {
+
+        if (
+          publication.track
+        ) {
+
+          try {
+
+            publication.track.detach();
+
+          } catch {}
+
+        }
+
+      }
+
+    }
+
+  }
+
+}
+
+
+/*
+==================================================
+HANGUP
+==================================================
+*/
+
+async function hangup() {
+
+  /*
+  Отключаем LiveKit.
+  LiveKit сам остановит
+  опубликованные локальные
+  tracks при disconnect(true).
+  */
+
+  if (room) {
+
+    try {
+
+      await room.disconnect(
+        true
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Disconnect error:",
+        error
+      );
+
+    }
+
+  }
+
+
+  room =
+    null;
+
+
+  clearRemoteMedia();
+
+
+  /*
+  Локальное видео.
+  */
+
+  try {
+
+    localVideo.srcObject =
+      null;
+
+  } catch {}
+
+
+  /*
+  Сбрасываем состояние.
+  */
+
+  micEnabled =
+    true;
+
+  cameraEnabled =
+    true;
+
+  facingMode =
+    "user";
+
+
+  updateControls();
+
+
+  localPlaceholder
+    ?.classList
+    .remove(
+      "hidden"
+    );
+
+  remotePlaceholder
+    ?.classList
+    .remove(
+      "hidden"
+    );
+
+
+  setConnectionStatus(
+    "Звонок завершён"
+  );
+
+
+  showStartScreen();
+
+
+  setStartStatus(
+    ""
+  );
+
+
+  showToast(
+    "Звонок завершён."
   );
 
 }
+
+
+/*
+==================================================
+CREATE CALL
+==================================================
+*/
+
+async function createCall() {
+
+  try {
+
+    startButton.disabled =
+      true;
+
+    joinButton.disabled =
+      true;
+
+
+    roomCode =
+      generateRoomCode();
+
+
+    identity =
+      createIdentity();
+
+
+    myPeerId.textContent =
+      roomCode;
+
+
+    await connectToRoom(
+      roomCode
+    );
+
+
+    setConnectionStatus(
+      "Ожидание собеседника..."
+    );
+
+
+    if (
+      remotePlaceholderText
+    ) {
+
+      remotePlaceholderText.textContent =
+        "Ожидание собеседника...";
+
+    }
+
+
+    showToast(
+      "Звонок создан. Передайте код собеседнику."
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "Create call error:",
+      error
+    );
+
+    showStartStatus(
+      error.message ||
+      "Не удалось создать звонок."
+    );
+
+  } finally {
+
+    startButton.disabled =
+      false;
+
+    joinButton.disabled =
+      false;
+
+  }
+
+}
+
+
+/*
+==================================================
+JOIN CALL
+==================================================
+*/
+
+async function joinCall() {
+
+  const code =
+    String(
+      remoteIdInput.value ||
+      ""
+    )
+      .toUpperCase()
+      .replace(
+        /[^A-Z0-9]/g,
+        ""
+      )
+      .slice(
+        0,
+        6
+      );
+
+
+  if (
+    code.length !==
+    6
+  ) {
+
+    setStartStatus(
+      "Введите правильный 6-значный код."
+    );
+
+    return;
+
+  }
+
+
+  try {
+
+    startButton.disabled =
+      true;
+
+    joinButton.disabled =
+      true;
+
+
+    identity =
+      createIdentity();
+
+
+    roomCode =
+      code;
+
+
+    myPeerId.textContent =
+      code;
+
+
+    await connectToRoom(
+      code
+    );
+
+
+    setConnectionStatus(
+      "Подключено. Ожидание видео..."
+    );
+
+
+  } catch (error) {
+
+    console.error(
+      "Join call error:",
+      error
+    );
+
+
+    setStartStatus(
+      error.message ||
+      "Не удалось подключиться."
+    );
+
+
+    if (room) {
+
+      try {
+
+        await room.disconnect(
+          true
+        );
+
+      } catch {}
+
+      room =
+        null;
+
+    }
+
+  } finally {
+
+    startButton.disabled =
+      false;
+
+    joinButton.disabled =
+      false;
+
+  }
+
+}
+
+
+/*
+==================================================
+COPY BUTTONS
+==================================================
+*/
+
+copyIdButton?.addEventListener(
+  "click",
+  () => {
+
+    if (
+      roomCode
+    ) {
+
+      copyText(
+        roomCode
+      );
+
+    }
+
+  }
+);
+
+
+copyMyIdButton?.addEventListener(
+  "click",
+  () => {
+
+    if (
+      roomCode
+    ) {
+
+      copyText(
+        roomCode
+      );
+
+    }
+
+  }
+);
 
 
 /*
@@ -1966,119 +1784,78 @@ BUTTONS
 ==================================================
 */
 
-startButton.addEventListener(
+startButton?.addEventListener(
   "click",
-  createRoom
+  createCall
 );
 
-joinButton.addEventListener(
+
+joinButton?.addEventListener(
   "click",
-  joinRoom
+  joinCall
 );
 
-micButton.addEventListener(
+
+micButton?.addEventListener(
   "click",
   toggleMicrophone
 );
 
-cameraButton.addEventListener(
+
+cameraButton?.addEventListener(
   "click",
   toggleCamera
 );
 
-switchCameraButton.addEventListener(
+
+switchCameraButton?.addEventListener(
   "click",
   switchCamera
 );
 
-hangupButton.addEventListener(
+
+hangupButton?.addEventListener(
   "click",
   hangup
 );
 
 
-copyMyIdButton.addEventListener(
-  "click",
-  () => {
-
-    if (roomId) {
-
-      copyText(
-        roomId
-      );
-
-    }
-
-  }
-);
-
-
-copyIdButton.addEventListener(
-  "click",
-  () => {
-
-    if (roomId) {
-
-      copyText(
-        roomId
-      );
-
-    }
-
-  }
-);
-
-
-acceptCallButton.addEventListener(
-  "click",
-  () => {
-
-    incomingCall.classList.add(
-      "hidden"
-    );
-
-    pendingIncoming = false;
-
-  }
-);
-
-
-rejectCallButton.addEventListener(
-  "click",
-  () => {
-
-    sendSignal(
-      {
-        type: "reject"
-      }
-    );
-
-    incomingCall.classList.add(
-      "hidden"
-    );
-
-    pendingIncoming = false;
-
-  }
-);
-
-
 /*
 ==================================================
-ENTER KEY
+ENTER CODE
 ==================================================
 */
 
-remoteIdInput.addEventListener(
+remoteIdInput?.addEventListener(
+  "input",
+  () => {
+
+    remoteIdInput.value =
+      remoteIdInput.value
+        .toUpperCase()
+        .replace(
+          /[^A-Z0-9]/g,
+          ""
+        )
+        .slice(
+          0,
+          6
+        );
+
+  }
+);
+
+
+remoteIdInput?.addEventListener(
   "keydown",
   event => {
 
     if (
       event.key ===
-        "Enter"
+      "Enter"
     ) {
 
-      joinRoom();
+      joinCall();
 
     }
 
@@ -2088,30 +1865,29 @@ remoteIdInput.addEventListener(
 
 /*
 ==================================================
-PAGE EXIT
+PAGE VISIBILITY
 ==================================================
 */
 
-window.addEventListener(
-  "beforeunload",
+document.addEventListener(
+  "visibilitychange",
   () => {
 
     if (
-      socket &&
-      socket.readyState ===
-        WebSocket.OPEN &&
-      roomId
+      document.visibilityState ===
+      "visible" &&
+      room
     ) {
 
-      try {
+      /*
+      LiveKit сам занимается
+      восстановлением соединения.
+      */
 
-        sendSignal(
-          {
-            type: "leave"
-          }
-        );
-
-      } catch {}
+      console.log(
+        "PWA visible, room:",
+        room.name
+      );
 
     }
 
@@ -2121,46 +1897,14 @@ window.addEventListener(
 
 /*
 ==================================================
-PWA
+INITIAL STATE
 ==================================================
 */
 
-if (
-  "serviceWorker" in
-  navigator
-) {
+showStartScreen();
 
-  window.addEventListener(
-    "load",
-    () => {
+updateControls();
 
-      navigator.serviceWorker
-        .register(
-          "sw.js"
-        )
-        .catch(
-          error => {
-
-            console.warn(
-              "Service worker:",
-              error
-            );
-
-          }
-        );
-
-    }
-  );
-
-}
-
-
-/*
-==================================================
-START
-==================================================
-*/
-
-setStartStatus(
-  "Создайте звонок или введите код собеседника."
+console.log(
+  "Video Call PWA — LiveKit"
 );
