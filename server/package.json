@@ -8,5 +8,6 @@
   },
   "dependencies": {
     "livekit-server-sdk": "^2.18.0"
+    "livekit-server-sdk": "^2.15.0"
   }
 }
