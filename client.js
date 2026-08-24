@@ -596,29 +596,43 @@ async function connectToRoom(
 
 
   room.on(
-    RoomEvent.ParticipantConnected,
-    participant => {
+  RoomEvent.ParticipantConnected,
+  participant => {
 
-      console.log(
-        "Participant connected:",
-        participant.identity
+    console.log(
+      "Participant connected:",
+      participant.identity
+    );
+
+    setConnectionStatus(
+      "Собеседник подключён"
+    );
+
+
+    /*
+    ========================================
+    СКРЫВАЕМ ПАНЕЛЬ КОДА
+    ========================================
+    */
+
+    document
+      .querySelector(".my-id-panel")
+      ?.classList.add(
+        "connected"
       );
 
-      setConnectionStatus(
-        "Собеседник подключён"
-      );
 
-      if (
-        remotePlaceholderText
-      ) {
+    if (
+      remotePlaceholderText
+    ) {
 
-        remotePlaceholderText.textContent =
-          "Собеседник подключён";
-
-      }
+      remotePlaceholderText.textContent =
+        "Собеседник подключён";
 
     }
-  );
+
+  }
+);
 
 
   room.on(
@@ -635,6 +649,11 @@ async function connectToRoom(
       setConnectionStatus(
         "Собеседник отключился"
       );
+      document
+  .querySelector(".my-id-panel")
+  ?.classList.remove(
+    "connected"
+  );
 
       if (
         remotePlaceholderText
