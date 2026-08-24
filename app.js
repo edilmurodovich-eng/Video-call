@@ -9,6 +9,11 @@ LIVEKIT
 
 const LIVEKIT =
   window.LivekitClient;
+alert(
+  LIVEKIT
+    ? "LiveKit загружен"
+    : "LiveKit НЕ загружен"
+);
 
 if (!LIVEKIT) {
   console.error("LiveKit SDK не загружен.");
