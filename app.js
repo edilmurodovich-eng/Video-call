@@ -11,19 +11,19 @@ const LIVEKIT =
   window.LivekitClient;
 
 if (!LIVEKIT) {
-
-  console.error(
-    "LiveKit SDK не загружен."
-  );
-
+  console.error("LiveKit SDK не загружен.");
+} else {
+  console.log("LiveKit SDK загружен:", LIVEKIT);
 }
 
+const Room =
+  LIVEKIT?.Room;
 
-const {
-  Room,
-  RoomEvent,
-  Track
-} = LIVEKIT;
+const RoomEvent =
+  LIVEKIT?.RoomEvent;
+
+const Track =
+  LIVEKIT?.Track;
 
 
 /*
