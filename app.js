@@ -1,31 +1,16 @@
 "use strict";
 
 /*
-========================================
+==================================================
 VIDEO CALL
-WebRTC + PeerJS
-========================================
+ЧИСТЫЙ WEBRTC + WEBSOCKET SIGNALING
+==================================================
 */
 
-let peer = null;
-
-let localStream = null;
-
-let currentCall = null;
-
-let pendingCall = null;
-
-let currentCamera = "user";
-
-let micEnabled = true;
-
-let cameraEnabled = true;
-
-
 /*
-========================================
-ELEMENTS
-========================================
+==================================================
+DOM
+==================================================
 */
 
 const startScreen =
@@ -53,44 +38,31 @@ const localVideo =
   document.getElementById("localVideo");
 
 const remotePlaceholder =
-  document.getElementById(
-    "remotePlaceholder"
-  );
+  document.getElementById("remotePlaceholder");
+
+const remotePlaceholderText =
+  document.getElementById("remotePlaceholderText");
 
 const localPlaceholder =
-  document.getElementById(
-    "localPlaceholder"
-  );
+  document.getElementById("localPlaceholder");
 
 const connectionStatus =
-  document.getElementById(
-    "connectionStatus"
-  );
+  document.getElementById("connectionStatus");
 
 const myPeerId =
-  document.getElementById(
-    "myPeerId"
-  );
+  document.getElementById("myPeerId");
 
 const copyMyIdButton =
-  document.getElementById(
-    "copyMyIdButton"
-  );
+  document.getElementById("copyMyIdButton");
 
 const copyIdButton =
-  document.getElementById(
-    "copyIdButton"
-  );
+  document.getElementById("copyIdButton");
 
 const micButton =
-  document.getElementById(
-    "micButton"
-  );
+  document.getElementById("micButton");
 
 const cameraButton =
-  document.getElementById(
-    "cameraButton"
-  );
+  document.getElementById("cameraButton");
 
 const switchCameraButton =
   document.getElementById(
@@ -98,14 +70,10 @@ const switchCameraButton =
   );
 
 const hangupButton =
-  document.getElementById(
-    "hangupButton"
-  );
+  document.getElementById("hangupButton");
 
 const incomingCall =
-  document.getElementById(
-    "incomingCall"
-  );
+  document.getElementById("incomingCall");
 
 const acceptCallButton =
   document.getElementById(
@@ -118,28 +86,127 @@ const rejectCallButton =
   );
 
 const toast =
-  document.getElementById(
-    "toast"
-  );
+  document.getElementById("toast");
 
 
 /*
-========================================
-UTILITY
-========================================
+==================================================
+STATE
+==================================================
 */
+
+let socket = null;
+
+let roomId = null;
+
+let isHost = false;
+
+let peerConnection = null;
+
+let localStream = null;
+
+let pendingIceCandidates = [];
+
+let pendingIncoming = false;
+
+let micEnabled = true;
+
+let cameraEnabled = true;
+
+let currentCamera = "user";
+
+let reconnectTimer = null;
+
+
+/*
+==================================================
+TURN / STUN
+==================================================
+
+Важное:
+TURN credentials берём с signaling server
+через /turn.
+
+Постоянные Metered credentials
+не храним здесь.
+==================================================
+*/
+
+let iceServers = [
+  {
+    urls: [
+      "stun:stun.relay.metered.ca:80"
+    ]
+  }
+];
+
+
+/*
+==================================================
+WEBSOCKET URL
+==================================================
+*/
+
+function getWebSocketUrl() {
+
+  const protocol =
+    location.protocol === "https:"
+      ? "wss:"
+      : "ws:";
+
+  return (
+    protocol +
+    "//" +
+    location.host
+  );
+
+}
+
+
+/*
+==================================================
+STATUS
+==================================================
+*/
+
+function setStartStatus(text) {
+
+  startStatus.textContent =
+    text || "";
+
+}
+
+
+function setConnectionStatus(text) {
+
+  connectionStatus.textContent =
+    text || "";
+
+}
+
+
+/*
+==================================================
+TOAST
+==================================================
+*/
+
+let toastTimer = null;
 
 function showToast(message) {
 
-  toast.textContent = message;
+  toast.textContent =
+    message;
 
-  toast.classList.remove("hidden");
-
-  clearTimeout(
-    showToast.timer
+  toast.classList.remove(
+    "hidden"
   );
 
-  showToast.timer =
+  clearTimeout(
+    toastTimer
+  );
+
+  toastTimer =
     setTimeout(
       () => {
 
@@ -154,23 +221,11 @@ function showToast(message) {
 }
 
 
-function setStatus(message) {
-
-  startStatus.textContent =
-    message;
-
-}
-
-
-function setConnectionStatus(
-  message
-) {
-
-  connectionStatus.textContent =
-    message;
-
-}
-
+/*
+==================================================
+SHOW SCREENS
+==================================================
+*/
 
 function showStartScreen() {
 
@@ -199,9 +254,121 @@ function showCallScreen() {
 
 
 /*
-========================================
-LOCAL MEDIA
-========================================
+==================================================
+GENERATE ROOM
+==================================================
+*/
+
+function generateRoomId() {
+
+  const chars =
+    "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+  let result = "";
+
+  for (
+    let i = 0;
+    i < 6;
+    i++
+  ) {
+
+    result +=
+      chars[
+        Math.floor(
+          Math.random() *
+          chars.length
+        )
+      ];
+
+  }
+
+  return result;
+
+}
+
+
+/*
+==================================================
+NORMALIZE ROOM
+==================================================
+*/
+
+function normalizeRoomId(value) {
+
+  return String(
+    value || ""
+  )
+    .toUpperCase()
+    .replace(
+      /[^A-Z0-9]/g,
+      ""
+    )
+    .slice(0, 6);
+
+}
+
+
+/*
+==================================================
+LOAD TURN
+==================================================
+*/
+
+async function loadTurnServers() {
+
+  try {
+
+    const response =
+      await fetch(
+        "/turn",
+        {
+          cache: "no-store"
+        }
+      );
+
+    if (!response.ok) {
+
+      throw new Error(
+        "TURN server unavailable"
+      );
+
+    }
+
+    const data =
+      await response.json();
+
+    if (
+      Array.isArray(
+        data.iceServers
+      ) &&
+      data.iceServers.length
+    ) {
+
+      iceServers =
+        data.iceServers;
+
+    }
+
+  } catch (error) {
+
+    console.warn(
+      "TURN не загружен:",
+      error
+    );
+
+    /*
+    STUN всё равно оставляем.
+    */
+
+  }
+
+}
+
+
+/*
+==================================================
+MEDIA
+==================================================
 */
 
 async function getLocalMedia() {
@@ -212,191 +379,399 @@ async function getLocalMedia() {
 
   }
 
-  try {
+  setConnectionStatus(
+    "Запрашиваем камеру и микрофон..."
+  );
 
-    localStream =
-      await navigator.mediaDevices
-        .getUserMedia({
-          audio: true,
-          video: {
-            facingMode:
-              currentCamera
-          }
-        });
+  localStream =
+    await navigator.mediaDevices.getUserMedia(
+      {
+        audio: true,
 
-    localVideo.srcObject =
-      localStream;
-
-    localVideo.play()
-      .catch(() => {});
-
-    updateLocalVideoState();
-
-    return localStream;
-
-  } catch (error) {
-
-    console.error(error);
-
-    if (
-      error.name ===
-      "NotAllowedError"
-    ) {
-
-      throw new Error(
-        "Разрешите доступ к камере и микрофону."
-      );
-
-    }
-
-    if (
-      error.name ===
-      "NotFoundError"
-    ) {
-
-      throw new Error(
-        "Камера или микрофон не найдены."
-      );
-
-    }
-
-    throw new Error(
-      "Не удалось получить доступ к камере."
+        video: {
+          facingMode:
+            currentCamera
+        }
+      }
     );
 
-  }
+  localVideo.srcObject =
+    localStream;
+
+  localVideo.play().catch(
+    () => {}
+  );
+
+  updateLocalVideoState();
+
+  return localStream;
 
 }
 
 
 /*
-========================================
-PEER INITIALIZATION
-========================================
+==================================================
+CREATE PEER CONNECTION
+==================================================
 */
 
-function createPeer() {
+function createPeerConnection() {
 
-  return new Promise(
-    (resolve, reject) => {
+  if (peerConnection) {
 
-      if (peer) {
+    try {
 
-        resolve(peer);
+      peerConnection.close();
+
+    } catch {}
+
+  }
+
+  pendingIceCandidates = [];
+
+  peerConnection =
+    new RTCPeerConnection(
+      {
+        iceServers,
+
+        iceCandidatePoolSize: 10
+      }
+    );
+
+
+  /*
+  -----------------------------------------------
+  LOCAL TRACKS
+  -----------------------------------------------
+  */
+
+  if (localStream) {
+
+    localStream
+      .getTracks()
+      .forEach(
+        track => {
+
+          peerConnection.addTrack(
+            track,
+            localStream
+          );
+
+        }
+      );
+
+  }
+
+
+  /*
+  -----------------------------------------------
+  REMOTE TRACK
+  -----------------------------------------------
+  */
+
+  peerConnection.ontrack =
+    event => {
+
+      const stream =
+        event.streams &&
+        event.streams[0];
+
+      if (!stream) {
 
         return;
 
       }
 
-      setStatus(
-        "Подключение к серверу..."
+      remoteVideo.srcObject =
+        stream;
+
+      remotePlaceholder.classList.add(
+        "hidden"
       );
 
-      peer =
-        new Peer({
-          debug: 1
-        });
+      remoteVideo.play().catch(
+        () => {}
+      );
 
-      peer.on(
-        "open",
-        id => {
+      setConnectionStatus(
+        "Собеседник подключён"
+      );
+
+    };
+
+
+  /*
+  -----------------------------------------------
+  ICE
+  -----------------------------------------------
+  */
+
+  peerConnection.onicecandidate =
+    event => {
+
+      if (
+        event.candidate &&
+        socket &&
+        socket.readyState ===
+          WebSocket.OPEN
+      ) {
+
+        sendSignal(
+          {
+            type: "ice",
+
+            candidate:
+              event.candidate
+          }
+        );
+
+      }
+
+    };
+
+
+  /*
+  -----------------------------------------------
+  CONNECTION
+  -----------------------------------------------
+  */
+
+  peerConnection.onconnectionstatechange =
+    () => {
+
+      if (!peerConnection) {
+
+        return;
+
+      }
+
+      const state =
+        peerConnection.connectionState;
+
+      console.log(
+        "WebRTC:",
+        state
+      );
+
+      if (
+        state === "connected"
+      ) {
+
+        setConnectionStatus(
+          "Соединение установлено"
+        );
+
+        remotePlaceholder.classList.add(
+          "hidden"
+        );
+
+      }
+
+      else if (
+        state === "connecting"
+      ) {
+
+        setConnectionStatus(
+          "Соединение..."
+        );
+
+      }
+
+      else if (
+        state === "disconnected"
+      ) {
+
+        setConnectionStatus(
+          "Соединение потеряно..."
+        );
+
+      }
+
+      else if (
+        state === "failed"
+      ) {
+
+        setConnectionStatus(
+          "Не удалось установить соединение"
+        );
+
+        showToast(
+          "WebRTC-соединение не установлено."
+        );
+
+      }
+
+      else if (
+        state === "closed"
+      ) {
+
+        setConnectionStatus(
+          "Звонок завершён"
+        );
+
+      }
+
+    };
+
+
+  /*
+  -----------------------------------------------
+  ICE CONNECTION
+  -----------------------------------------------
+  */
+
+  peerConnection.oniceconnectionstatechange =
+    () => {
+
+      console.log(
+        "ICE:",
+        peerConnection.iceConnectionState
+      );
+
+    };
+
+
+  /*
+  -----------------------------------------------
+  SIGNALING STATE
+  -----------------------------------------------
+  */
+
+  peerConnection.onsignalingstatechange =
+    () => {
+
+      console.log(
+        "Signaling:",
+        peerConnection.signalingState
+      );
+
+    };
+
+
+  return peerConnection;
+
+}
+
+
+/*
+==================================================
+CONNECT SIGNALING
+==================================================
+*/
+
+function connectSocket() {
+
+  return new Promise(
+    (resolve, reject) => {
+
+      if (
+        socket &&
+        socket.readyState ===
+          WebSocket.OPEN
+      ) {
+
+        resolve();
+
+        return;
+
+      }
+
+      const ws =
+        new WebSocket(
+          getWebSocketUrl()
+        );
+
+      socket = ws;
+
+
+      let opened = false;
+
+
+      ws.onopen =
+        () => {
+
+          opened = true;
 
           console.log(
-            "Peer ID:",
-            id
+            "Signaling connected"
           );
 
-          myPeerId.textContent =
-            id;
+          resolve();
 
-          setStatus(
-            "Готово. Передайте ID собеседнику."
-          );
+        };
 
-          resolve(peer);
 
-        }
-      );
-
-      peer.on(
-        "call",
-        call => {
-
-          handleIncomingCall(
-            call
-          );
-
-        }
-      );
-
-      peer.on(
-        "error",
+      ws.onerror =
         error => {
 
           console.error(
-            "Peer error:",
+            "WebSocket error:",
             error
           );
 
+          if (!opened) {
+
+            reject(
+              new Error(
+                "Не удалось подключиться к signaling server"
+              )
+            );
+
+          }
+
+        };
+
+
+      ws.onclose =
+        () => {
+
+          console.log(
+            "Signaling disconnected"
+          );
+
           if (
-            error.type ===
-            "peer-unavailable"
+            socket === ws
           ) {
 
-            showToast(
-              "Собеседник не найден."
-            );
+            socket = null;
+
+          }
+
+          if (roomId) {
 
             setConnectionStatus(
-              "Собеседник не найден"
+              "Сигнализация отключена"
             );
 
           }
 
-          else if (
-            error.type ===
-            "network"
-          ) {
+        };
 
-            showToast(
-              "Ошибка сетевого соединения."
+
+      ws.onmessage =
+        event => {
+
+          try {
+
+            const message =
+              JSON.parse(
+                event.data
+              );
+
+            handleSignal(
+              message
+            );
+
+          } catch (error) {
+
+            console.error(
+              "Bad signaling message:",
+              error
             );
 
           }
 
-          else {
-
-            showToast(
-              "Ошибка: " +
-              error.type
-            );
-
-          }
-
-        }
-      );
-
-      peer.on(
-        "disconnected",
-        () => {
-
-          setConnectionStatus(
-            "Соединение с сервером потеряно"
-          );
-
-        }
-      );
-
-      peer.on(
-        "close",
-        () => {
-
-          setConnectionStatus(
-            "Соединение закрыто"
-          );
-
-        }
-      );
+        };
 
     }
   );
@@ -405,131 +780,113 @@ function createPeer() {
 
 
 /*
-========================================
-CREATE CALL
-========================================
+==================================================
+SEND SIGNAL
+==================================================
 */
 
-async function createCall() {
+function sendSignal(payload) {
 
-  startButton.disabled =
-    true;
+  if (
+    !socket ||
+    socket.readyState !==
+      WebSocket.OPEN
+  ) {
 
-  try {
-
-    await getLocalMedia();
-
-    await createPeer();
-
-    showCallScreen();
-
-    setConnectionStatus(
-      "Ваш ID готов"
-    );
-
-  } catch (error) {
-
-    console.error(error);
-
-    showToast(
-      error.message
-    );
-
-  } finally {
-
-    startButton.disabled =
-      false;
-
-  }
-
-}
-
-
-/*
-========================================
-JOIN CALL
-========================================
-*/
-
-async function joinCall() {
-
-  const remoteId =
-    remoteIdInput.value.trim();
-
-  if (!remoteId) {
-
-    showToast(
-      "Введите ID собеседника."
+    console.warn(
+      "Socket is not connected"
     );
 
     return;
 
   }
 
-  if (
-    !peer ||
-    !peer.open
-  ) {
+  socket.send(
+    JSON.stringify(
+      {
+        roomId,
 
-    try {
+        ...payload
+      }
+    )
+  );
 
-      await createPeer();
+}
 
-    } catch (error) {
 
-      showToast(
-        error.message
-      );
+/*
+==================================================
+CREATE ROOM
+==================================================
+*/
 
-      return;
-
-    }
-
-  }
-
-  joinButton.disabled =
-    true;
+async function createRoom() {
 
   try {
 
+    startButton.disabled =
+      true;
+
+    joinButton.disabled =
+      true;
+
+    setStartStatus(
+      "Подключение..."
+    );
+
+
+    await loadTurnServers();
+
     await getLocalMedia();
+
+    roomId =
+      generateRoomId();
+
+    isHost = true;
+
+    await connectSocket();
+
+
+    sendSignal(
+      {
+        type: "create"
+      }
+    );
+
 
     showCallScreen();
 
+    myPeerId.textContent =
+      roomId;
+
     setConnectionStatus(
-      "Звоним..."
+      "Комната создана. Ожидание собеседника..."
     );
 
-    const call =
-      peer.call(
-        remoteId,
-        localStream
-      );
+    remotePlaceholderText.textContent =
+      "Ожидание собеседника...";
 
-    if (!call) {
 
-      throw new Error(
-        "Не удалось начать звонок."
-      );
-
-    }
-
-    currentCall =
-      call;
-
-    setupCall(
-      call
+    showToast(
+      "Код звонка создан"
     );
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      error
+    );
 
-    showToast(
-      error.message
+    cleanupCall();
+
+    setStartStatus(
+      getErrorMessage(error)
     );
 
   } finally {
+
+    startButton.disabled =
+      false;
 
     joinButton.disabled =
       false;
@@ -540,34 +897,25 @@ async function joinCall() {
 
 
 /*
-========================================
-INCOMING CALL
-========================================
+==================================================
+JOIN ROOM
+==================================================
 */
 
-function handleIncomingCall(
-  call
-) {
+async function joinRoom() {
 
-  pendingCall =
-    call;
+  const id =
+    normalizeRoomId(
+      remoteIdInput.value
+    );
 
-  incomingCall.classList.remove(
-    "hidden"
-  );
+  if (
+    id.length !== 6
+  ) {
 
-}
-
-
-/*
-========================================
-ACCEPT
-========================================
-*/
-
-async function acceptIncomingCall() {
-
-  if (!pendingCall) {
+    setStartStatus(
+      "Введите правильный 6-значный код."
+    );
 
     return;
 
@@ -575,37 +923,432 @@ async function acceptIncomingCall() {
 
   try {
 
-    await getLocalMedia();
+    startButton.disabled =
+      true;
 
-    incomingCall.classList.add(
-      "hidden"
-    );
+    joinButton.disabled =
+      true;
 
-    showCallScreen();
-
-    setConnectionStatus(
+    setStartStatus(
       "Подключение..."
     );
 
-    currentCall =
-      pendingCall;
 
-    pendingCall.answer(
-      localStream
+    await loadTurnServers();
+
+    await getLocalMedia();
+
+    roomId =
+      id;
+
+    isHost = false;
+
+    await connectSocket();
+
+
+    sendSignal(
+      {
+        type: "join"
+      }
     );
 
-    setupCall(
-      pendingCall
+
+    showCallScreen();
+
+    myPeerId.textContent =
+      roomId;
+
+    setConnectionStatus(
+      "Подключение к собеседнику..."
     );
 
-    pendingCall = null;
+    remotePlaceholderText.textContent =
+      "Подключение...";
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      error
+    );
+
+    cleanupCall();
+
+    setStartStatus(
+      getErrorMessage(error)
+    );
+
+  } finally {
+
+    startButton.disabled =
+      false;
+
+    joinButton.disabled =
+      false;
+
+  }
+
+}
+
+
+/*
+==================================================
+SIGNAL HANDLER
+==================================================
+*/
+
+async function handleSignal(message) {
+
+  console.log(
+    "SIGNAL:",
+    message.type
+  );
+
+
+  if (
+    message.type ===
+    "created"
+  ) {
+
+    setConnectionStatus(
+      "Комната создана. Ожидание собеседника..."
+    );
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "joined"
+  ) {
+
+    if (!isHost) {
+
+      setConnectionStatus(
+        "Собеседник найден..."
+      );
+
+    }
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "peer-joined"
+  ) {
+
+    if (!isHost) {
+
+      return;
+
+    }
+
+    setConnectionStatus(
+      "Собеседник найден. Создание соединения..."
+    );
+
+    await startOffer();
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "offer"
+  ) {
+
+    await handleOffer(
+      message.offer
+    );
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "answer"
+  ) {
+
+    await handleAnswer(
+      message.answer
+    );
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "ice"
+  ) {
+
+    await handleRemoteIce(
+      message.candidate
+    );
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "peer-left"
+  ) {
+
+    setConnectionStatus(
+      "Собеседник отключился"
+    );
+
+    remotePlaceholder.classList.remove(
+      "hidden"
+    );
+
+    remotePlaceholderText.textContent =
+      "Собеседник отключился";
+
+    remoteVideo.srcObject =
+      null;
+
+    if (peerConnection) {
+
+      try {
+
+        peerConnection.close();
+
+      } catch {}
+
+      peerConnection =
+        null;
+
+    }
 
     showToast(
-      error.message
+      "Собеседник завершил звонок."
+    );
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "room-full"
+  ) {
+
+    showToast(
+      "Эта комната уже занята."
+    );
+
+    cleanupCall();
+
+    setStartStatus(
+      "Комната уже занята."
+    );
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "room-not-found"
+  ) {
+
+    showToast(
+      "Комната не найдена."
+    );
+
+    cleanupCall();
+
+    setStartStatus(
+      "Комната не найдена."
+    );
+
+    return;
+
+  }
+
+
+  if (
+    message.type ===
+    "rejected"
+  ) {
+
+    showToast(
+      "Звонок отклонён."
+    );
+
+    cleanupCall();
+
+    return;
+
+  }
+
+}
+
+
+/*
+==================================================
+START OFFER
+==================================================
+*/
+
+async function startOffer() {
+
+  if (!peerConnection) {
+
+    createPeerConnection();
+
+  }
+
+  const offer =
+    await peerConnection.createOffer(
+      {
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true
+      }
+    );
+
+  await peerConnection.setLocalDescription(
+    offer
+  );
+
+  sendSignal(
+    {
+      type: "offer",
+
+      offer:
+        peerConnection.localDescription
+    }
+  );
+
+}
+
+
+/*
+==================================================
+HANDLE OFFER
+==================================================
+*/
+
+async function handleOffer(
+  offer
+) {
+
+  if (!peerConnection) {
+
+    createPeerConnection();
+
+  }
+
+  await peerConnection.setRemoteDescription(
+    new RTCSessionDescription(
+      offer
+    )
+  );
+
+  await flushPendingIce();
+
+  const answer =
+    await peerConnection.createAnswer();
+
+  await peerConnection.setLocalDescription(
+    answer
+  );
+
+  sendSignal(
+    {
+      type: "answer",
+
+      answer:
+        peerConnection.localDescription
+    }
+  );
+
+}
+
+
+/*
+==================================================
+HANDLE ANSWER
+==================================================
+*/
+
+async function handleAnswer(
+  answer
+) {
+
+  if (!peerConnection) {
+
+    return;
+
+  }
+
+  await peerConnection.setRemoteDescription(
+    new RTCSessionDescription(
+      answer
+    )
+  );
+
+  await flushPendingIce();
+
+}
+
+
+/*
+==================================================
+HANDLE ICE
+==================================================
+*/
+
+async function handleRemoteIce(
+  candidate
+) {
+
+  if (!candidate) {
+
+    return;
+
+  }
+
+  if (
+    !peerConnection ||
+    !peerConnection.remoteDescription
+  ) {
+
+    pendingIceCandidates.push(
+      candidate
+    );
+
+    return;
+
+  }
+
+  try {
+
+    await peerConnection.addIceCandidate(
+      new RTCIceCandidate(
+        candidate
+      )
+    );
+
+  } catch (error) {
+
+    console.warn(
+      "ICE candidate error:",
+      error
     );
 
   }
@@ -614,116 +1357,63 @@ async function acceptIncomingCall() {
 
 
 /*
-========================================
-REJECT
-========================================
+==================================================
+FLUSH ICE
+==================================================
 */
 
-function rejectIncomingCall() {
+async function flushPendingIce() {
 
-  if (pendingCall) {
+  if (!peerConnection) {
 
-    try {
-
-      pendingCall.close();
-
-    } catch {}
+    return;
 
   }
 
-  pendingCall = null;
+  if (
+    !peerConnection.remoteDescription
+  ) {
 
-  incomingCall.classList.add(
-    "hidden"
-  );
+    return;
 
-}
+  }
+
+  const candidates =
+    pendingIceCandidates;
+
+  pendingIceCandidates = [];
 
 
-/*
-========================================
-SETUP CALL
-========================================
-*/
+  for (
+    const candidate of candidates
+  ) {
 
-function setupCall(call) {
+    try {
 
-  call.on(
-    "stream",
-    remoteStream => {
-
-      console.log(
-        "Remote stream received"
+      await peerConnection.addIceCandidate(
+        new RTCIceCandidate(
+          candidate
+        )
       );
 
-      remoteVideo.srcObject =
-        remoteStream;
+    } catch (error) {
 
-      remoteVideo.play()
-        .catch(() => {});
-
-      remotePlaceholder.classList.add(
-        "hidden"
-      );
-
-      setConnectionStatus(
-        "Соединение установлено"
-      );
-
-    }
-  );
-
-  call.on(
-    "close",
-    () => {
-
-      setConnectionStatus(
-        "Звонок завершён"
-      );
-
-      remoteVideo.srcObject =
-        null;
-
-      remotePlaceholder.classList.remove(
-        "hidden"
-      );
-
-      currentCall = null;
-
-      showToast(
-        "Звонок завершён."
-      );
-
-    }
-  );
-
-  call.on(
-    "error",
-    error => {
-
-      console.error(
-        "Call error:",
+      console.warn(
+        "ICE flush error:",
         error
       );
 
-      setConnectionStatus(
-        "Ошибка соединения"
-      );
-
-      showToast(
-        "Ошибка видеозвонка."
-      );
-
     }
-  );
+
+  }
 
 }
 
 
 /*
-========================================
-MICROPHONE
-========================================
+==================================================
+MIC
+==================================================
 */
 
 function toggleMicrophone() {
@@ -755,23 +1445,29 @@ function toggleMicrophone() {
     }
   );
 
+  micButton.classList.toggle(
+    "off",
+    !micEnabled
+  );
+
   micButton.textContent =
     micEnabled
       ? "🎙️"
       : "🔇";
 
-  micButton.classList.toggle(
-    "off",
-    !micEnabled
+  showToast(
+    micEnabled
+      ? "Микрофон включён"
+      : "Микрофон выключен"
   );
 
 }
 
 
 /*
-========================================
+==================================================
 CAMERA
-========================================
+==================================================
 */
 
 function toggleCamera() {
@@ -803,28 +1499,34 @@ function toggleCamera() {
     }
   );
 
-  cameraButton.textContent =
-    cameraEnabled
-      ? "📷"
-      : "🚫";
-
   cameraButton.classList.toggle(
     "off",
     !cameraEnabled
   );
+
+  cameraButton.textContent =
+    cameraEnabled
+      ? "📷"
+      : "🚫";
 
   localPlaceholder.classList.toggle(
     "hidden",
     cameraEnabled
   );
 
+  showToast(
+    cameraEnabled
+      ? "Камера включена"
+      : "Камера выключена"
+  );
+
 }
 
 
 /*
-========================================
+==================================================
 SWITCH CAMERA
-========================================
+==================================================
 */
 
 async function switchCamera() {
@@ -835,72 +1537,76 @@ async function switchCamera() {
 
   }
 
-  const oldVideoTracks =
-    localStream.getVideoTracks();
-
-  if (!oldVideoTracks.length) {
+  if (
+    !navigator.mediaDevices ||
+    !navigator.mediaDevices.getUserMedia
+  ) {
 
     return;
 
   }
+
+
+  const oldTrack =
+    localStream.getVideoTracks()[0];
+
+  if (!oldTrack) {
+
+    return;
+
+  }
+
 
   currentCamera =
     currentCamera === "user"
       ? "environment"
       : "user";
 
+
   try {
 
     const newStream =
-      await navigator.mediaDevices
-        .getUserMedia({
+      await navigator.mediaDevices.getUserMedia(
+        {
           audio: false,
+
           video: {
             facingMode:
-              currentCamera
+              {
+                ideal:
+                  currentCamera
+              }
           }
-        });
+        }
+      );
+
 
     const newTrack =
       newStream.getVideoTracks()[0];
 
-    const oldTrack =
-      oldVideoTracks[0];
+    if (!newTrack) {
+
+      throw new Error(
+        "Камера недоступна"
+      );
+
+    }
+
 
     /*
-    Меняем track
-    в локальном MediaStream.
+    Заменяем track в WebRTC.
     */
 
-    localStream.removeTrack(
-      oldTrack
-    );
-
-    localStream.addTrack(
-      newTrack
-    );
-
-    oldTrack.stop();
-
-    localVideo.srcObject =
-      localStream;
-
-    /*
-    Если звонок уже идёт,
-    заменяем video track
-    в RTCPeerConnection.
-    */
-
-    if (currentCall) {
+    if (peerConnection) {
 
       const sender =
-        currentCall.peerConnection
-          ?.getSenders()
-          ?.find(
+        peerConnection
+          .getSenders()
+          .find(
             item =>
               item.track &&
               item.track.kind ===
-              "video"
+                "video"
           );
 
       if (sender) {
@@ -913,6 +1619,38 @@ async function switchCamera() {
 
     }
 
+
+    localStream.removeTrack(
+      oldTrack
+    );
+
+    oldTrack.stop();
+
+    localStream.addTrack(
+      newTrack
+    );
+
+    localVideo.srcObject =
+      localStream;
+
+    newTrack.enabled =
+      cameraEnabled;
+
+    localVideo.play().catch(
+      () => {}
+    );
+
+
+    /*
+    Mirror only front camera.
+    */
+
+    localVideo.style.transform =
+      currentCamera === "user"
+        ? "scaleX(-1)"
+        : "scaleX(1)";
+
+
     showToast(
       currentCamera === "user"
         ? "Фронтальная камера"
@@ -921,12 +1659,10 @@ async function switchCamera() {
 
   } catch (error) {
 
-    console.error(error);
-
-    /*
-    Некоторые устройства
-    не поддерживают facingMode.
-    */
+    console.error(
+      "Camera switch error:",
+      error
+    );
 
     currentCamera =
       currentCamera === "user"
@@ -943,44 +1679,76 @@ async function switchCamera() {
 
 
 /*
-========================================
-HANG UP
-========================================
+==================================================
+HANGUP
+==================================================
 */
 
 function hangup() {
 
   /*
-  ========================================
-  ЗАКРЫВАЕМ WEBRTC ЗВОНОК
-  ========================================
+  Сообщаем серверу,
+  что пользователь вышел.
   */
 
-  if (currentCall) {
+  if (
+    socket &&
+    socket.readyState ===
+      WebSocket.OPEN &&
+    roomId
+  ) {
 
     try {
 
-      currentCall.close();
-
-    } catch (error) {
-
-      console.error(
-        "Ошибка завершения звонка:",
-        error
+      sendSignal(
+        {
+          type: "leave"
+        }
       );
 
-    }
+    } catch {}
 
   }
 
-  currentCall = null;
+  cleanupCall();
+
+  showToast(
+    "Звонок завершён."
+  );
+
+}
 
 
-  /*
-  ========================================
-  ОСТАНАВЛИВАЕМ КАМЕРУ И МИКРОФОН
-  ========================================
-  */
+/*
+==================================================
+CLEANUP
+==================================================
+*/
+
+function cleanupCall() {
+
+  if (peerConnection) {
+
+    try {
+
+      peerConnection.ontrack =
+        null;
+
+      peerConnection.onicecandidate =
+        null;
+
+      peerConnection.onconnectionstatechange =
+        null;
+
+      peerConnection.close();
+
+    } catch {}
+
+  }
+
+  peerConnection =
+    null;
+
 
   if (localStream) {
 
@@ -1000,58 +1768,33 @@ function hangup() {
 
   }
 
-  localStream = null;
+  localStream =
+    null;
 
 
-  /*
-  ========================================
-  ОЧИЩАЕМ VIDEO
-  ========================================
-  */
+  localVideo.srcObject =
+    null;
 
-  if (localVideo) {
-
-    localVideo.srcObject =
-      null;
-
-  }
-
-  if (remoteVideo) {
-
-    remoteVideo.srcObject =
-      null;
-
-  }
+  remoteVideo.srcObject =
+    null;
 
 
-  /*
-  ========================================
-  ВОЗВРАЩАЕМ PLACEHOLDER
-  ========================================
-  */
+  remotePlaceholder.classList.remove(
+    "hidden"
+  );
 
-  if (remotePlaceholder) {
-
-    remotePlaceholder.classList.remove(
-      "hidden"
-    );
-
-  }
-
-  if (localPlaceholder) {
-
-    localPlaceholder.classList.remove(
-      "hidden"
-    );
-
-  }
+  localPlaceholder.classList.remove(
+    "hidden"
+  );
 
 
-  /*
-  ========================================
-  СБРАСЫВАЕМ СОСТОЯНИЕ
-  ========================================
-  */
+  pendingIceCandidates = [];
+
+  roomId = null;
+
+  isHost = false;
+
+  pendingIncoming = false;
 
   micEnabled = true;
 
@@ -1060,81 +1803,67 @@ function hangup() {
   currentCamera = "user";
 
 
-  /*
-  ========================================
-  СБРАСЫВАЕМ КНОПКИ
-  ========================================
-  */
+  micButton.textContent =
+    "🎙️";
 
-  if (micButton) {
+  cameraButton.textContent =
+    "📷";
 
-    micButton.textContent =
-      "🎙️";
 
-    micButton.classList.remove(
-      "off"
-    );
+  micButton.classList.remove(
+    "off"
+  );
+
+  cameraButton.classList.remove(
+    "off"
+  );
+
+
+  localVideo.style.transform =
+    "scaleX(-1)";
+
+
+  if (socket) {
+
+    try {
+
+      socket.close();
+
+    } catch {}
 
   }
 
-  if (cameraButton) {
-
-    cameraButton.textContent =
-      "📷";
-
-    cameraButton.classList.remove(
-      "off"
-    );
-
-  }
+  socket = null;
 
 
-  /*
-  ========================================
-  СТАТУС
-  ========================================
-  */
+  incomingCall.classList.add(
+    "hidden"
+  );
+
+
+  myPeerId.textContent =
+    "Создание...";
+
 
   setConnectionStatus(
-    "Звонок завершён"
+    "Подключение..."
   );
 
-
-  /*
-  ========================================
-  ВОЗВРАЩАЕМСЯ НА ГЛАВНЫЙ ЭКРАН
-  ========================================
-  */
 
   showStartScreen();
-
-
-  /*
-  ========================================
-  СООБЩЕНИЕ
-  ========================================
-  */
-
-  showToast(
-    "Звонок завершён."
-  );
 
 }
 
 
 /*
-========================================
-COPY ID
-========================================
+==================================================
+COPY
+==================================================
 */
 
-async function copyText(text) {
-
-  if (!text) {
-
-    return;
-
-  }
+async function copyText(
+  text
+) {
 
   try {
 
@@ -1143,43 +1872,33 @@ async function copyText(text) {
     );
 
     showToast(
-      "ID скопирован."
+      "Скопировано"
     );
 
   } catch {
 
-    /*
-    Fallback для старых браузеров.
-    */
-
-    const textarea =
+    const input =
       document.createElement(
-        "textarea"
+        "input"
       );
 
-    textarea.value =
+    input.value =
       text;
 
-    textarea.style.position =
-      "fixed";
-
-    textarea.style.opacity =
-      "0";
-
     document.body.appendChild(
-      textarea
+      input
     );
 
-    textarea.select();
+    input.select();
 
     document.execCommand(
       "copy"
     );
 
-    textarea.remove();
+    input.remove();
 
     showToast(
-      "ID скопирован."
+      "Скопировано"
     );
 
   }
@@ -1188,88 +1907,73 @@ async function copyText(text) {
 
 
 /*
-========================================
-LOCAL VIDEO STATE
-========================================
+==================================================
+ERROR MESSAGE
+==================================================
 */
 
-function updateLocalVideoState() {
+function getErrorMessage(
+  error
+) {
 
-  if (!localStream) {
+  if (
+    error &&
+    error.name ===
+      "NotAllowedError"
+  ) {
 
-    return;
+    return (
+      "Разрешите доступ к камере и микрофону."
+    );
 
   }
 
-  const videoTracks =
-    localStream.getVideoTracks();
+  if (
+    error &&
+    error.name ===
+      "NotFoundError"
+  ) {
 
-  const audioTracks =
-    localStream.getAudioTracks();
+    return (
+      "Камера или микрофон не найдены."
+    );
 
-  cameraEnabled =
-    videoTracks.length
-      ? videoTracks[0].enabled
-      : false;
+  }
 
-  micEnabled =
-    audioTracks.length
-      ? audioTracks[0].enabled
-      : false;
+  if (
+    error &&
+    error.name ===
+      "NotReadableError"
+  ) {
 
-  cameraButton.textContent =
-    cameraEnabled
-      ? "📷"
-      : "🚫";
+    return (
+      "Камера или микрофон уже используются."
+    );
 
-  micButton.textContent =
-    micEnabled
-      ? "🎙️"
-      : "🔇";
+  }
+
+  return (
+    error?.message ||
+    "Произошла ошибка."
+  );
 
 }
 
 
 /*
-========================================
-BUTTON EVENTS
-========================================
+==================================================
+BUTTONS
+==================================================
 */
 
 startButton.addEventListener(
   "click",
-  createCall
+  createRoom
 );
 
 joinButton.addEventListener(
   "click",
-  joinCall
-);
-
-remoteIdInput.addEventListener(
-  "keydown",
-  event => {
-
-    if (
-      event.key ===
-      "Enter"
-    ) {
-
-      joinCall();
-
-    }
-
-  }
-);
-
-acceptCallButton.addEventListener(
-  "click",
-  acceptIncomingCall
-);
-
-rejectCallButton.addEventListener(
-  "click",
-  rejectIncomingCall
+  joinRoom
 );
 
 micButton.addEventListener(
@@ -1292,71 +1996,138 @@ hangupButton.addEventListener(
   hangup
 );
 
+
 copyMyIdButton.addEventListener(
   "click",
   () => {
 
-    copyText(
-      myPeerId.textContent
-    );
+    if (roomId) {
+
+      copyText(
+        roomId
+      );
+
+    }
 
   }
 );
+
 
 copyIdButton.addEventListener(
   "click",
   () => {
 
-    copyText(
-      myPeerId.textContent
+    if (roomId) {
+
+      copyText(
+        roomId
+      );
+
+    }
+
+  }
+);
+
+
+acceptCallButton.addEventListener(
+  "click",
+  () => {
+
+    incomingCall.classList.add(
+      "hidden"
     );
+
+    pendingIncoming = false;
+
+  }
+);
+
+
+rejectCallButton.addEventListener(
+  "click",
+  () => {
+
+    sendSignal(
+      {
+        type: "reject"
+      }
+    );
+
+    incomingCall.classList.add(
+      "hidden"
+    );
+
+    pendingIncoming = false;
 
   }
 );
 
 
 /*
-========================================
-START
-========================================
+==================================================
+ENTER KEY
+==================================================
+*/
+
+remoteIdInput.addEventListener(
+  "keydown",
+  event => {
+
+    if (
+      event.key ===
+        "Enter"
+    ) {
+
+      joinRoom();
+
+    }
+
+  }
+);
+
+
+/*
+==================================================
+PAGE EXIT
+==================================================
 */
 
 window.addEventListener(
-  "load",
+  "beforeunload",
   () => {
 
-    /*
-    Создаём Peer ID заранее.
-    Камеру пока НЕ включаем.
-    */
+    if (
+      socket &&
+      socket.readyState ===
+        WebSocket.OPEN &&
+      roomId
+    ) {
 
-    createPeer()
-      .catch(
-        error => {
+      try {
 
-          console.error(
-            error
-          );
+        sendSignal(
+          {
+            type: "leave"
+          }
+        );
 
-          setStatus(
-            "Не удалось подключиться. Обновите страницу."
-          );
+      } catch {}
 
-        }
-      );
+    }
 
   }
 );
 
 
 /*
-========================================
-SERVICE WORKER
-========================================
+==================================================
+PWA
+==================================================
 */
 
 if (
-  "serviceWorker" in navigator
+  "serviceWorker" in
+  navigator
 ) {
 
   window.addEventListener(
@@ -1371,7 +2142,7 @@ if (
           error => {
 
             console.warn(
-              "Service Worker:",
+              "Service worker:",
               error
             );
 
@@ -1382,3 +2153,14 @@ if (
   );
 
 }
+
+
+/*
+==================================================
+START
+==================================================
+*/
+
+setStartStatus(
+  "Создайте звонок или введите код собеседника."
+);
