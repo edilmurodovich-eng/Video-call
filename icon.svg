@@ -1,0 +1,39 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+>
+  <rect
+    width="512"
+    height="512"
+    rx="110"
+    fill="#0b0b0f"
+  />
+
+  <rect
+    x="90"
+    y="145"
+    width="270"
+    height="220"
+    rx="45"
+    fill="#ffffff"
+  />
+
+  <path
+    d="M360 205l80-55c15-10 35 1 35 19v174c0 18-20 29-35 19l-80-55z"
+    fill="#ffffff"
+  />
+
+  <circle
+    cx="225"
+    cy="255"
+    r="52"
+    fill="#0b0b0f"
+  />
+
+  <circle
+    cx="225"
+    cy="255"
+    r="22"
+    fill="#ffffff"
+  />
+</svg>
