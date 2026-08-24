@@ -2,6 +2,7 @@
 <html lang="ru">
 
 <head>
+
   <meta charset="UTF-8">
 
   <meta
@@ -37,6 +38,12 @@
   >
 
   <link
+    rel="icon"
+    href="icon.svg"
+    type="image/svg+xml"
+  >
+
+  <link
     rel="stylesheet"
     href="style.css"
   >
@@ -45,275 +52,287 @@
 
 <body>
 
-  <main class="app">
+<main class="app">
 
-    <!-- START SCREEN -->
+  <!-- =========================
+       START
+  ========================== -->
 
-    <section
-      id="startScreen"
-      class="screen"
-    >
+  <section
+    id="startScreen"
+    class="screen"
+  >
 
-      <div class="logo">
-        📹
+    <div class="logo">
+      📹
+    </div>
+
+    <h1>
+      Video Call
+    </h1>
+
+    <p class="subtitle">
+      Защищённый видеозвонок через WebRTC
+    </p>
+
+    <div class="card">
+
+      <button
+        id="startButton"
+        class="primary-button"
+      >
+        🎥 Создать звонок
+      </button>
+
+      <div class="divider">
+        <span>или</span>
       </div>
 
-      <h1>
-        Video Call
-      </h1>
+      <input
+        id="remoteIdInput"
+        type="text"
+        maxlength="8"
+        placeholder="Введите код звонка"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+      >
 
-      <p class="subtitle">
-        Простой видеозвонок через WebRTC
-      </p>
+      <button
+        id="joinButton"
+        class="secondary-button"
+      >
+        📞 Подключиться
+      </button>
 
-      <div class="card">
+    </div>
 
-        <button
-          id="startButton"
-          class="primary-button"
-        >
-          🎥 Создать звонок
-        </button>
+    <div
+      id="startStatus"
+      class="status"
+    ></div>
 
-        <div class="divider">
-          <span>или</span>
-        </div>
+  </section>
 
-        <input
-          id="remoteIdInput"
-          type="text"
-          placeholder="Введите ID собеседника"
-          autocomplete="off"
-        >
 
-        <button
-          id="joinButton"
-          class="secondary-button"
-        >
-          📞 Позвонить
-        </button>
+  <!-- =========================
+       CALL
+  ========================== -->
 
-      </div>
+  <section
+    id="callScreen"
+    class="screen hidden"
+  >
+
+    <div class="video-area">
+
+      <!-- REMOTE -->
+
+      <video
+        id="remoteVideo"
+        autoplay
+        playsinline
+      ></video>
 
       <div
-        id="startStatus"
-        class="status"
-      ></div>
+        id="remotePlaceholder"
+        class="video-placeholder"
+      >
 
-    </section>
+        <div class="placeholder-icon">
+          👤
+        </div>
+
+        <div id="remotePlaceholderText">
+          Ожидание собеседника...
+        </div>
+
+      </div>
 
 
-    <!-- CALL SCREEN -->
+      <!-- LOCAL -->
 
-    <section
-      id="callScreen"
-      class="screen hidden"
-    >
-
-      <div class="video-area">
-
-        <!-- REMOTE VIDEO -->
+      <div class="local-video-container">
 
         <video
-          id="remoteVideo"
+          id="localVideo"
           autoplay
+          muted
           playsinline
         ></video>
 
         <div
-          id="remotePlaceholder"
-          class="video-placeholder"
+          id="localPlaceholder"
+          class="local-placeholder"
         >
-
-          <div class="placeholder-icon">
-            👤
-          </div>
-
-          <div>
-            Ожидание собеседника...
-          </div>
-
+          📷
         </div>
 
+      </div>
 
-        <!-- LOCAL VIDEO -->
 
-        <div class="local-video-container">
+      <!-- TOP -->
 
-          <video
-            id="localVideo"
-            autoplay
-            muted
-            playsinline
-          ></video>
+      <div class="call-top">
+
+        <div>
+
+          <div class="call-title">
+            Video Call
+          </div>
 
           <div
-            id="localPlaceholder"
-            class="local-placeholder"
+            id="connectionStatus"
+            class="connection-status"
           >
-            📷
+            Подключение...
           </div>
 
         </div>
 
-
-        <!-- TOP BAR -->
-
-        <div class="call-top">
-
-          <div>
-
-            <div class="call-title">
-              Video Call
-            </div>
-
-            <div
-              id="connectionStatus"
-              class="connection-status"
-            >
-              Подключение...
-            </div>
-
-          </div>
-
-          <button
-            id="copyIdButton"
-            class="small-button"
-          >
-            🔗 ID
-          </button>
-
-        </div>
-
-
-        <!-- CONTROLS -->
-
-        <div class="controls">
-
-          <button
-            id="micButton"
-            class="control-button"
-          >
-            🎙️
-          </button>
-
-          <button
-            id="cameraButton"
-            class="control-button"
-          >
-            📷
-          </button>
-
-          <button
-            id="switchCameraButton"
-            class="control-button"
-          >
-            🔄
-          </button>
-
-          <button
-            id="hangupButton"
-            class="control-button hangup"
-          >
-            📞
-          </button>
-
-        </div>
+        <button
+          id="copyIdButton"
+          class="small-button"
+        >
+          🔗 Код
+        </button>
 
       </div>
 
 
-      <!-- MY ID -->
+      <!-- CONTROLS -->
 
-      <div class="my-id-panel">
+      <div class="controls">
 
-        <div class="my-id-label">
-          Ваш ID для звонка
-        </div>
+        <button
+          id="micButton"
+          class="control-button"
+          type="button"
+          aria-label="Микрофон"
+        >
+          🎙️
+        </button>
 
-        <div class="my-id-row">
+        <button
+          id="cameraButton"
+          class="control-button"
+          type="button"
+          aria-label="Камера"
+        >
+          📷
+        </button>
 
-          <code id="myPeerId">
-            Создание...
-          </code>
+        <button
+          id="switchCameraButton"
+          class="control-button"
+          type="button"
+          aria-label="Перевернуть камеру"
+        >
+          🔄
+        </button>
 
-          <button
-            id="copyMyIdButton"
-            class="copy-button"
-          >
-            Копировать
-          </button>
-
-        </div>
-
-      </div>
-
-    </section>
-
-
-    <!-- INCOMING CALL -->
-
-    <div
-      id="incomingCall"
-      class="incoming hidden"
-    >
-
-      <div class="incoming-card">
-
-        <div class="incoming-icon">
+        <button
+          id="hangupButton"
+          class="control-button hangup"
+          type="button"
+          aria-label="Завершить звонок"
+        >
           📞
-        </div>
-
-        <h2>
-          Входящий звонок
-        </h2>
-
-        <p>
-          Собеседник хочет связаться с вами
-        </p>
-
-        <div class="incoming-buttons">
-
-          <button
-            id="acceptCallButton"
-            class="accept-button"
-          >
-            ✓ Принять
-          </button>
-
-          <button
-            id="rejectCallButton"
-            class="reject-button"
-          >
-            ✕ Отклонить
-          </button>
-
-        </div>
+        </button>
 
       </div>
 
     </div>
 
 
-    <!-- TOAST -->
+    <!-- ROOM CODE -->
 
-    <div
-      id="toast"
-      class="toast hidden"
-    ></div>
+    <div class="my-id-panel">
 
-  </main>
+      <div class="my-id-label">
+        Код звонка
+      </div>
+
+      <div class="my-id-row">
+
+        <code id="myPeerId">
+          Создание...
+        </code>
+
+        <button
+          id="copyMyIdButton"
+          class="copy-button"
+          type="button"
+        >
+          Копировать
+        </button>
+
+      </div>
+
+    </div>
+
+  </section>
 
 
-  <!-- PEERJS -->
+  <!-- =========================
+       INCOMING
+  ========================== -->
 
-  <script
-    src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"
-  ></script>
+  <div
+    id="incomingCall"
+    class="incoming hidden"
+  >
 
-  <script
-    src="app.js"
-  ></script>
+    <div class="incoming-card">
+
+      <div class="incoming-icon">
+        📞
+      </div>
+
+      <h2>
+        Входящий звонок
+      </h2>
+
+      <p>
+        Собеседник хочет подключиться
+      </p>
+
+      <div class="incoming-buttons">
+
+        <button
+          id="acceptCallButton"
+          class="accept-button"
+          type="button"
+        >
+          ✓ Принять
+        </button>
+
+        <button
+          id="rejectCallButton"
+          class="reject-button"
+          type="button"
+        >
+          ✕ Отклонить
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- TOAST -->
+
+  <div
+    id="toast"
+    class="toast hidden"
+  ></div>
+
+</main>
+
+
+<script src="app.js"></script>
 
 </body>
 
