@@ -54,13 +54,11 @@ button {
 
 #introScreen {
   position: fixed;
-
   inset: 0;
 
   z-index: 9999;
 
   display: flex;
-
   align-items: center;
   justify-content: center;
 
@@ -87,7 +85,9 @@ button {
 }
 
 
-/* LOGO */
+/* ==================================================
+   INTRO LOGO
+================================================== */
 
 .intro-logo {
   width: 145px;
@@ -110,7 +110,9 @@ button {
 }
 
 
-/* NAMES */
+/* ==================================================
+   INTRO NAMES
+================================================== */
 
 .intro-names {
   margin-top: 26px;
@@ -141,8 +143,7 @@ button {
 
   opacity: 0;
 
-  transform:
-    translateY(12px);
+  transform: translateY(12px);
 
   animation:
     introNameIn
@@ -152,11 +153,9 @@ button {
 }
 
 
-/*
-==================================================
-ШТОРКА
-==================================================
-*/
+/* ==================================================
+   CURTAIN
+================================================== */
 
 .intro-name::after {
   content: "";
@@ -171,8 +170,7 @@ button {
 
   background: #e8dcc8;
 
-  transform:
-    translateX(0);
+  transform: translateX(0);
 
   animation:
     introCurtain
@@ -182,11 +180,9 @@ button {
 }
 
 
-/*
-==================================================
-ПОСЛЕДОВАТЕЛЬНОСТЬ
-==================================================
-*/
+/* ==================================================
+   NAME SEQUENCE
+================================================== */
 
 .intro-name:nth-child(1) {
   animation-delay: 1.15s;
@@ -213,11 +209,9 @@ button {
 }
 
 
-/*
-==================================================
-INTRO ANIMATIONS
-==================================================
-*/
+/* ==================================================
+   INTRO ANIMATIONS
+================================================== */
 
 @keyframes introLogoIn {
 
@@ -243,7 +237,6 @@ INTRO ANIMATIONS
 
 }
 
-
 @keyframes introNameIn {
 
   0% {
@@ -262,7 +255,6 @@ INTRO ANIMATIONS
 
 }
 
-
 @keyframes introCurtain {
 
   0% {
@@ -277,12 +269,10 @@ INTRO ANIMATIONS
 
 }
 
-
 @keyframes introFadeOut {
 
   0% {
     opacity: 1;
-
     visibility: visible;
   }
 
@@ -292,9 +282,7 @@ INTRO ANIMATIONS
 
   100% {
     opacity: 0;
-
     visibility: hidden;
-
     pointer-events: none;
   }
 
@@ -317,7 +305,9 @@ INTRO ANIMATIONS
 }
 
 
-/* LOGO */
+/* ==================================================
+   START LOGO
+================================================== */
 
 .logo {
   width: 82px;
@@ -340,7 +330,9 @@ INTRO ANIMATIONS
 }
 
 
-/* TITLE */
+/* ==================================================
+   TITLE
+================================================== */
 
 h1 {
   margin: 22px 0 8px;
@@ -359,7 +351,9 @@ h1 {
 }
 
 
-/* CARD */
+/* ==================================================
+   CARD
+================================================== */
 
 .card {
   width: 100%;
@@ -379,7 +373,9 @@ h1 {
 }
 
 
-/* BUTTONS */
+/* ==================================================
+   BUTTONS
+================================================== */
 
 .primary-button,
 .secondary-button {
@@ -409,7 +405,8 @@ h1 {
 .primary-button:active,
 .secondary-button:active,
 .control-button:active,
-.small-button:active {
+.small-button:active,
+.copy-button:active {
   transform: scale(.96);
 }
 
@@ -419,7 +416,9 @@ h1 {
 }
 
 
-/* DIVIDER */
+/* ==================================================
+   DIVIDER
+================================================== */
 
 .divider {
   display: flex;
@@ -447,7 +446,9 @@ h1 {
 }
 
 
-/* INPUT */
+/* ==================================================
+   INPUT
+================================================== */
 
 input {
   width: 100%;
@@ -478,7 +479,9 @@ input:focus {
 }
 
 
-/* STATUS */
+/* ==================================================
+   STATUS
+================================================== */
 
 .status {
   min-height: 24px;
@@ -519,7 +522,9 @@ input:focus {
 }
 
 
-/* REMOTE */
+/* ==================================================
+   REMOTE VIDEO
+================================================== */
 
 #remoteVideo {
   position: absolute;
@@ -535,7 +540,9 @@ input:focus {
 }
 
 
-/* PLACEHOLDER */
+/* ==================================================
+   VIDEO PLACEHOLDER
+================================================== */
 
 .video-placeholder {
   position: absolute;
@@ -580,7 +587,9 @@ input:focus {
 }
 
 
-/* LOCAL VIDEO */
+/* ==================================================
+   LOCAL VIDEO
+================================================== */
 
 .local-video-container {
   position: absolute;
@@ -633,7 +642,7 @@ input:focus {
 
 
 /* ==================================================
-   TOP
+   CALL TOP
 ================================================== */
 
 .call-top {
@@ -679,23 +688,29 @@ input:focus {
 }
 
 
-/* CODE BUTTON */
+/* ==================================================
+   TOP CODE BUTTON
+================================================== */
 
 .small-button {
-  padding: 10px 13px;
+  padding: 7px 9px;
 
-  border-radius: 12px;
+  border-radius: 9px;
 
   background:
-    rgba(20,20,27,.8);
+    rgba(20,20,27,.35);
 
-  color: white;
+  color: rgba(255,255,255,.85);
 
-  font-size: 13px;
+  font-size: 11px;
 
-  font-weight: 800;
+  font-weight: 700;
 
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(8px);
+
+  border:
+    1px solid
+    rgba(255,255,255,.06);
 }
 
 
@@ -777,6 +792,7 @@ input:focus {
 
 /* ==================================================
    ROOM CODE PANEL
+   КОМПАКТНЫЙ + ПРОЗРАЧНЫЙ
 ================================================== */
 
 .my-id-panel {
@@ -784,43 +800,55 @@ input:focus {
 
   left: 50%;
 
-  bottom: 88px;
+  bottom: 91px;
 
   transform:
     translateX(-50%);
 
   z-index: 20;
 
-  width:
-    calc(100% - 40px);
+  width: auto;
 
-  max-width: 480px;
+  max-width: min(
+    230px,
+    calc(100% - 32px)
+  );
 
-  padding: 8px 10px;
+  padding: 6px 8px;
 
-  border-radius: 12px;
+  border-radius: 10px;
+
+  /*
+  70% прозрачности
+  */
 
   background:
     rgba(15,15,20,.30);
 
   border:
     1px solid
-    rgba(255,255,255,.07);
+    rgba(255,255,255,.05);
 
   backdrop-filter:
-    blur(10px);
+    blur(8px);
+
+  -webkit-backdrop-filter:
+    blur(8px);
+
+  box-shadow:
+    0 6px 20px
+    rgba(0,0,0,.12);
 
   transition:
-    opacity .35s ease,
-    transform .35s ease,
-    visibility .35s ease;
+    opacity .3s ease,
+    transform .3s ease,
+    visibility .3s ease;
 }
 
 
-/*
-Когда собеседник подключился —
-панель исчезает.
-*/
+/* ==================================================
+   HIDE CODE AFTER CONNECTION
+================================================== */
 
 .my-id-panel.connected {
   opacity: 0;
@@ -831,27 +859,52 @@ input:focus {
 
   transform:
     translateX(-50%)
-    translateY(12px);
+    translateY(10px)
+    scale(.94);
 }
+
+
+/* ==================================================
+   CODE LABEL
+================================================== */
 
 .my-id-label {
-  color: #8d8d98;
+  color:
+    rgba(255,255,255,.50);
 
-  font-size: 10px;
+  font-size: 8px;
+
+  line-height: 1;
 
   margin-bottom: 4px;
+
+  text-align: center;
 }
+
+
+/* ==================================================
+   CODE ROW
+================================================== */
 
 .my-id-row {
   display: flex;
 
   align-items: center;
 
-  gap: 7px;
+  justify-content: center;
+
+  gap: 6px;
 }
 
+
+/* ==================================================
+   ROOM CODE
+================================================== */
+
 .my-id-row code {
-  flex: 1;
+  display: block;
+
+  max-width: 105px;
 
   min-width: 0;
 
@@ -861,26 +914,55 @@ input:focus {
 
   white-space: nowrap;
 
-  color: white;
-
-  font-size: 12px;
-}
-
-.copy-button {
-  flex-shrink: 0;
-
-  padding: 6px 8px;
-
-  border-radius: 8px;
-
-  background:
-    rgba(41,41,50,.55);
-
-  color: white;
+  color:
+    rgba(255,255,255,.85);
 
   font-size: 11px;
 
   font-weight: 700;
+
+  letter-spacing: 1px;
+}
+
+
+/* ==================================================
+   COPY BUTTON
+================================================== */
+
+.copy-button {
+  flex-shrink: 0;
+
+  padding: 4px 6px;
+
+  border-radius: 6px;
+
+  background:
+    rgba(255,255,255,.10);
+
+  border:
+    1px solid
+    rgba(255,255,255,.05);
+
+  color:
+    rgba(255,255,255,.75);
+
+  font-size: 9px;
+
+  font-weight: 700;
+
+  backdrop-filter: blur(6px);
+
+  -webkit-backdrop-filter: blur(6px);
+
+  transition:
+    transform .15s ease,
+    background .15s ease,
+    opacity .15s ease;
+}
+
+.copy-button:hover {
+  background:
+    rgba(255,255,255,.16);
 }
 
 
@@ -1073,11 +1155,48 @@ input:focus {
     font-size: 20px;
   }
 
-  .my-id-panel {
-    bottom: 85px;
 
-    width:
-      calc(100% - 24px);
+  /* ================================================
+     MOBILE ROOM CODE
+  ================================================ */
+
+  .my-id-panel {
+    bottom: 88px;
+
+    max-width: 190px;
+
+    padding: 5px 7px;
+
+    border-radius: 9px;
+
+    background:
+      rgba(15,15,20,.28);
+  }
+
+  .my-id-label {
+    font-size: 7px;
+
+    margin-bottom: 3px;
+  }
+
+  .my-id-row {
+    gap: 5px;
+  }
+
+  .my-id-row code {
+    max-width: 85px;
+
+    font-size: 10px;
+
+    letter-spacing: .8px;
+  }
+
+  .copy-button {
+    padding: 3px 5px;
+
+    font-size: 8px;
+
+    border-radius: 5px;
   }
 
 }
@@ -1094,7 +1213,34 @@ input:focus {
   }
 
   .my-id-panel {
-    display: none;
+    bottom: 78px;
+  }
+
+}
+
+
+/* ==================================================
+   VERY SMALL PHONES
+================================================== */
+
+@media (max-width: 380px) {
+
+  .my-id-panel {
+    max-width: 170px;
+
+    padding: 4px 6px;
+  }
+
+  .my-id-row code {
+    max-width: 70px;
+
+    font-size: 9px;
+  }
+
+  .copy-button {
+    padding: 3px 4px;
+
+    font-size: 7px;
   }
 
 }
