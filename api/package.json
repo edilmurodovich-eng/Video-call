@@ -1,0 +1,9 @@
+{
+  "name": "video-call-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "livekit-server-sdk": "^2.18.0"
+  }
+}
